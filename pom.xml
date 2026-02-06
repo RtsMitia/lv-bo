@@ -27,6 +27,18 @@
             <version>1.0.0</version>
         </dependency>
         
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>5.0.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+        
         <!-- Jackson for JSON serialization (required at runtime) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -41,6 +53,12 @@
             <version>5.0.0</version>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>42.7.2</version>
+		</dependency>
 
         <!-- Jakarta Server Pages API -->
         <dependency>
