@@ -37,4 +37,24 @@ public class HotelRepository {
         }
         return list;
     }
+
+    public Hotel findById(int id) {
+        String sql = "SELECT id, nom FROM hotel WHERE id = ?";
+        try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Hotel h = new Hotel();
+                    h.setId(rs.getInt("id"));
+                    h.setNom(rs.getString("nom"));
+                    return h;
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Error fetching hotel by id", e);
+        }
+        return null;
+    }
 }

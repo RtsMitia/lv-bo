@@ -35,6 +35,10 @@ public class ReservationRepository {
                 r.setIdHotel(idHotelObj == null ? null : ((Number) idHotelObj).intValue());
                 list.add(r);
             }
+            
+            for (Reservation reservation : list) {
+                System.out.println(reservation.getId());
+            }
 
         } catch (SQLException e) {
             throw new RuntimeException("Error fetching reservations", e);

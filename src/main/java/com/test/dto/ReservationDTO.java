@@ -1,23 +1,13 @@
-package com.test.model;
+package com.test.dto;
 
-import java.time.LocalDateTime;
-
-public class Reservation {
+public class ReservationDTO {
     private Integer id;
     private String idClient;
     private Integer nbPassager;
-    private LocalDateTime dateHeureArrivee;
+    private String dateHeureArrivee;
     private Integer idHotel;
 
-    public Reservation() {
-    }
-
-    public Reservation(Integer id, String idClient, Integer nbPassager, LocalDateTime dateHeureArrivee, Integer idHotel) {
-        this.id = id;
-        this.idClient = idClient;
-        this.nbPassager = nbPassager;
-        this.dateHeureArrivee = dateHeureArrivee;
-        this.idHotel = idHotel;
+    public ReservationDTO() {
     }
 
     public Integer getId() {
@@ -44,11 +34,11 @@ public class Reservation {
         this.nbPassager = nbPassager;
     }
 
-    public LocalDateTime getDateHeureArrivee() {
+    public String getDateHeureArrivee() {
         return dateHeureArrivee;
     }
 
-    public void setDateHeureArrivee(LocalDateTime dateHeureArrivee) {
+    public void setDateHeureArrivee(String dateHeureArrivee) {
         this.dateHeureArrivee = dateHeureArrivee;
     }
 
@@ -62,11 +52,11 @@ public class Reservation {
 
     @Override
     public String toString() {
-        return "Reservation{" +
+        return "ReservationDTO{" +
                 "id=" + id +
                 ", idClient='" + idClient + '\'' +
                 ", nbPassager=" + nbPassager +
-                ", dateHeureArrivee=" + dateHeureArrivee +
+                ", dateHeureArrivee='" + dateHeureArrivee + '\'' +
                 ", idHotel=" + idHotel +
                 '}';
     }
