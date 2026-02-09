@@ -1,10 +1,10 @@
 /*public*/
-CREATE TABLE hotel (
+CREATE TABLE IF NOT EXISTS hotel (
     id SERIAL PRIMARY KEY,
     nom VARCHAR(50)
 );
 
-CREATE TABLE reservation (
+CREATE TABLE IF NOT EXISTS reservation (
     id SERIAL PRIMARY KEY,
     id_client VARCHAR(4),
     nb_passager INT,
@@ -14,12 +14,12 @@ CREATE TABLE reservation (
 
 
 /*dev*/
-CREATE TABLE dev.hotel (
+CREATE TABLE IF NOT EXISTS dev.hotel (
     id SERIAL PRIMARY KEY,
     nom VARCHAR(50)
 );
 
-CREATE TABLE dev.reservation (
+CREATE TABLE IF NOT EXISTS dev.reservation (
     id SERIAL PRIMARY KEY,
     id_client VARCHAR(4),
     nb_passager INT,
@@ -29,12 +29,12 @@ CREATE TABLE dev.reservation (
 
 
 /*staging*/
-CREATE TABLE staging.hotel (
+CREATE TABLE IF NOT EXISTS staging.hotel (
     id SERIAL PRIMARY KEY,
     nom VARCHAR(50)
 );
 
-CREATE TABLE staging.reservation (
+CREATE TABLE IF NOT EXISTS staging.reservation (
     id SERIAL PRIMARY KEY,
     id_client VARCHAR(4),
     nb_passager INT,
