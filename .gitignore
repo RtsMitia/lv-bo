@@ -70,5 +70,5 @@ bin/
 # Ignore IntelliJ scratch/idea misc
 *.iws
 
+deploy.bat
 # End of .gitignore
-
