@@ -73,7 +73,7 @@ public class ReservationRepository {
 
         } catch (SQLException e) {
             throw new RuntimeException("Error fetching reservations by date", e);
-        }
+        } 
 
         return list;
     }
