@@ -6,6 +6,7 @@ public class ReservationDTO {
     private Integer nbPassager;
     private String dateHeureArrivee;
     private Integer idHotel;
+    private String nomHotel;
 
     public ReservationDTO() {
     }
@@ -50,6 +51,14 @@ public class ReservationDTO {
         this.idHotel = idHotel;
     }
 
+    public String getNomHotel() {
+        return nomHotel;
+    }
+
+    public void setNomHotel(String nomHotel) {
+        this.nomHotel = nomHotel;
+    }
+
     @Override
     public String toString() {
         return "ReservationDTO{" +
@@ -58,6 +67,7 @@ public class ReservationDTO {
                 ", nbPassager=" + nbPassager +
                 ", dateHeureArrivee='" + dateHeureArrivee + '\'' +
                 ", idHotel=" + idHotel +
+                ", nomHotel='" + nomHotel + '\'' +
                 '}';
     }
 }

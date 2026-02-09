@@ -35,13 +35,44 @@ public class ReservationRepository {
                 r.setIdHotel(idHotelObj == null ? null : ((Number) idHotelObj).intValue());
                 list.add(r);
             }
-            
+
             for (Reservation reservation : list) {
                 System.out.println(reservation.getId());
             }
 
         } catch (SQLException e) {
             throw new RuntimeException("Error fetching reservations", e);
+        }
+
+        return list;
+    }
+
+    public List<Reservation> findByDate(java.time.LocalDate date) {
+        List<Reservation> list = new ArrayList<>();
+        String sql = "SELECT id, id_client, nb_passager, date_heure_arrivee, id_hotel FROM reservation WHERE CAST(date_heure_arrivee AS DATE) = ?";
+        try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setDate(1, java.sql.Date.valueOf(date));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Reservation r = new Reservation();
+                    r.setId(rs.getInt("id"));
+                    r.setIdClient(rs.getString("id_client"));
+                    int nb = rs.getInt("nb_passager");
+                    r.setNbPassager(rs.wasNull() ? null : nb);
+                    Timestamp ts = rs.getTimestamp("date_heure_arrivee");
+                    if (ts != null)
+                        r.setDateHeureArrivee(ts.toLocalDateTime());
+                    Object idHotelObj = rs.getObject("id_hotel");
+                    r.setIdHotel(idHotelObj == null ? null : ((Number) idHotelObj).intValue());
+                    list.add(r);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Error fetching reservations by date", e);
         }
 
         return list;

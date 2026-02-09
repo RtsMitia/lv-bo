@@ -32,6 +32,10 @@ public class ReservationController {
             dto.setNbPassager(r.getNbPassager());
             dto.setDateHeureArrivee(r.getDateHeureArrivee() == null ? null : r.getDateHeureArrivee().format(fmt));
             dto.setIdHotel(r.getIdHotel());
+            if (r.getIdHotel() != null) {
+                com.test.model.Hotel h = hotelRepo.findById(r.getIdHotel());
+                dto.setNomHotel(h == null ? null : h.getNom());
+            }
             out.add(dto);
         }
         return out;
