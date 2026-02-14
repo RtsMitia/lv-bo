@@ -43,7 +43,8 @@ public class ReservationController {
 
     @ManageUrl("/new")
     public ModelView newForm() {
-        ModelView mv = new ModelView("/WEB-INF/views/reservation/reservation_form.jsp");
+        ModelView mv = new ModelView("layout.jsp");
+        mv.addItem("content", "reservation/reservation_form.jsp");
         mv.addItem("hotels", hotelRepo.findAll());
         return mv;
     }
