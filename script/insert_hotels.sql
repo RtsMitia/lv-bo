@@ -1,16 +1,17 @@
--- Script d'insertion d'hôtels exemple
--- Exécuter après création de la table `hotel` (voir script-1.sql)
-
 INSERT INTO hotel (nom) VALUES
-('Hotel de la Gare'),
-('Hotel du Parc'),
-('Hotel Le Grand'),
-('Auberge du Soleil'),
-('Hotel Moderne'),
-('Hotel des Voyageurs'),
-('Hotel Continental'),
-('Hotel du Lac'),
-('Hotel Bellevue'),
-('Hotel du Centre');
+('Colbert'),
+('Novotel'),
+('Ibis'),
+('Lokanga');
 
--- Vous pouvez ajuster les noms ou ajouter d'autres lignes selon vos besoins.
+INSERT INTO reservation(id_client, nb_passager, date_heure_arrivee, id_hotel) VALUES
+('4631', 11, '2026-02-05 00:01', 3),
+('4394', 1, '2026-02-05 23:55', 3),
+('8054', 2, '2026-02-09 10:17', 1),
+('1432', 4, '2026-02-01 15:25', 2),
+('7861', 4, '2026-01-28 07:11', 1),
+('3308', 5, '2026-01-28 07:45', 1),
+('4484', 13, '2026-02-28 08:25', 2),
+('9687', 8, '2026-02-28 13:00', 2),
+('6302', 7, '2026-02-15 13:00', 1),
+('8640', 1, '2026-02-18 22:55', 4);
