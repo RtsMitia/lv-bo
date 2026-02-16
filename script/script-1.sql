@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS vehicule (
 CREATE TABLE IF NOT EXISTS token (
     id SERIAL PRIMARY KEY,
     token VARCHAR(50),
-    expiration TIMESTAMP
+    date_expiration TIMESTAMP
 );
 
 
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS dev.vehicule (
 CREATE TABLE IF NOT EXISTS dev.token (
     id SERIAL PRIMARY KEY,
     token VARCHAR(50),
-    expiration TIMESTAMP
+    date_expiration TIMESTAMP
 );
 
 /*staging*/
@@ -82,5 +82,5 @@ CREATE TABLE IF NOT EXISTS staging.vehicule (
 CREATE TABLE IF NOT EXISTS staging.token (
     id SERIAL PRIMARY KEY,
     token VARCHAR(50),
-    expiration TIMESTAMP
+    date_expiration TIMESTAMP
 );

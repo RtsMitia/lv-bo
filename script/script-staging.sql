@@ -16,3 +16,10 @@ CREATE TABLE IF NOT EXISTS staging.token (
     token VARCHAR(100),
     date_expiration TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS staging.vehicule (
+    id SERIAL PRIMARY KEY,
+    reference VARCHAR(50),
+    place INT,
+    type_carburant VARCHAR(1)
+);
