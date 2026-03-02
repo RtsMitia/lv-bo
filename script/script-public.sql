@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS vehicule (
 CREATE TABLE IF NOT EXISTS param (
     id SERIAL PRIMARY KEY,
     cle VARCHAR(50),
-    cle VARCHAR(50),
+    valeur VARCHAR(50)
 );
 
 CREATE TABLE IF NOT EXISTS distance (
@@ -36,5 +36,14 @@ CREATE TABLE IF NOT EXISTS distance (
     from INT REFERENCES hotel(id),
     to INT REFERENCES hotel(id),
     unite VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS assignation (
+    id SERIAL PRIMARY KEY,
+    vehicule INT REFERENCES vehicule(id),
+    reservation INT REFERENCES reservation(id),
+    nb_pers_prises INT,
+    depart_aeroport TIMESTAMP,
+    retour_aeroport TIMESTAMP
 );
 
