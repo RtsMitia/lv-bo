@@ -27,6 +27,25 @@ CREATE TABLE IF NOT EXISTS token (
     date_expiration TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS param (
+    id SERIAL PRIMARY KEY,
+    cle VARCHAR(50),
+    cle VARCHAR(50),
+);
+
+CREATE TABLE IF NOT EXISTS lieux (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50),
+    libelle VARCHAR(50),
+);
+
+CREATE TABLE IF NOT EXISTS distance (
+    id SERIAL PRIMARY KEY,
+    from INT REFERENCES lieux(id),
+    to INT REFERENCES lieux(id),
+    unite VARCHAR(50)
+);
+
 
 /*dev*/
 CREATE TABLE IF NOT EXISTS dev.hotel (
