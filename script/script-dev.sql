@@ -30,15 +30,9 @@ CREATE TABLE IF NOT EXISTS dev.param (
     cle VARCHAR(50),
 );
 
-CREATE TABLE IF NOT EXISTS dev.lieux (
-    id SERIAL PRIMARY KEY,
-    code VARCHAR(50),
-    libelle VARCHAR(50),
-);
-
 CREATE TABLE IF NOT EXISTS dev.distance (
     id SERIAL PRIMARY KEY,
-    from INT REFERENCES lieux(id),
-    to INT REFERENCES lieux(id),
+    from INT REFERENCES hotel(id),
+    to INT REFERENCES hotel(id),
     unite VARCHAR(50)
 );
