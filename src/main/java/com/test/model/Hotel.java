@@ -3,6 +3,7 @@ package com.test.model;
 public class Hotel {
     private Integer id;
     private String nom;
+    private Integer idLieu;
 
     public Hotel() {
     }
@@ -23,11 +24,20 @@ public class Hotel {
         this.nom = nom;
     }
 
+    public Integer getIdLieu() {
+        return idLieu;
+    }
+
+    public void setIdLieu(Integer idLieu) {
+        this.idLieu = idLieu;
+    }
+
     @Override
     public String toString() {
         return "Hotel{" +
                 "id=" + id +
                 ", nom='" + nom + '\'' +
+                ", idLieu=" + idLieu +
                 '}';
     }
 }

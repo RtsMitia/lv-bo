@@ -1,6 +1,13 @@
+CREATE TABLE IF NOT EXISTS lieux (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(10),
+    libelle VARCHAR(100)
+);
+
 CREATE TABLE IF NOT EXISTS hotel (
     id SERIAL PRIMARY KEY,
-    nom VARCHAR(50)
+    nom VARCHAR(50),
+    id_lieu INT REFERENCES lieux(id)
 );
 
 CREATE TABLE IF NOT EXISTS reservation (
@@ -33,17 +40,39 @@ CREATE TABLE IF NOT EXISTS param (
 
 CREATE TABLE IF NOT EXISTS distance (
     id SERIAL PRIMARY KEY,
-    from INT REFERENCES hotel(id),
-    to INT REFERENCES hotel(id),
+    "from" INT REFERENCES lieux(id),
+    "to" INT REFERENCES lieux(id),
+    distance NUMERIC(10,2),
     unite VARCHAR(50)
 );
 
 CREATE TABLE IF NOT EXISTS assignation (
     id SERIAL PRIMARY KEY,
     vehicule INT REFERENCES vehicule(id),
-    reservation INT REFERENCES reservation(id),
-    nb_pers_prises INT,
     depart_aeroport TIMESTAMP,
     retour_aeroport TIMESTAMP
 );
+
+-- details: one assignation can reference multiple reservations
+CREATE TABLE IF NOT EXISTS assignation_detail (
+    id SERIAL PRIMARY KEY,
+    id_association INT REFERENCES assignation(id),
+    id_reservation INT REFERENCES reservation(id),
+    nb_pers_prises INT
+);
+
+-- view showing assignation with total number of passengers across its details
+CREATE OR REPLACE VIEW assignation_lib AS
+SELECT a.id,
+       a.vehicule,
+       v.reference AS nom_vehicule,
+       v.place AS vehicule_place,
+       a.depart_aeroport,
+       a.retour_aeroport,
+       COALESCE(SUM(ad.nb_pers_prises), 0) AS total_passagers,
+       (v.place - COALESCE(SUM(ad.nb_pers_prises), 0)) AS reste_place
+FROM assignation a
+LEFT JOIN assignation_detail ad ON ad.id_association = a.id
+LEFT JOIN vehicule v ON v.id = a.vehicule
+GROUP BY a.id, a.vehicule, v.reference, v.place, a.depart_aeroport, a.retour_aeroport;
 

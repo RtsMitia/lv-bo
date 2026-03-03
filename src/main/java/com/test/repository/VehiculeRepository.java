@@ -134,4 +134,6 @@ public class VehiculeRepository {
             throw new RuntimeException("Error while deleting vehicule with id = " + id, e);
         }
     }
+
+    
 }
