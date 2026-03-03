@@ -1,5 +1,5 @@
 -- Lieux (locations)
-INSERT INTO dev.lieux (code, libelle) VALUES
+INSERT INTO staging.lieux (code, libelle) VALUES
 ('AIR', 'Aéroport'),
 ('COL', 'Colbert'),
 ('NOV', 'Novotel'),
@@ -7,26 +7,26 @@ INSERT INTO dev.lieux (code, libelle) VALUES
 ('LOK', 'Lokanga');
 
 -- Hotels with lieu references
-INSERT INTO dev.hotel (nom, id_lieu) VALUES
-('Colbert', (SELECT id FROM dev.lieux WHERE code = 'COL')),
-('Novotel', (SELECT id FROM dev.lieux WHERE code = 'NOV')),
-('Ibis', (SELECT id FROM dev.lieux WHERE code = 'IBI')),
-('Lokanga', (SELECT id FROM dev.lieux WHERE code = 'LOK'));
+INSERT INTO staging.hotel (nom, id_lieu) VALUES
+('Colbert', (SELECT id FROM staging.lieux WHERE code = 'COL')),
+('Novotel', (SELECT id FROM staging.lieux WHERE code = 'NOV')),
+('Ibis', (SELECT id FROM staging.lieux WHERE code = 'IBI')),
+('Lokanga', (SELECT id FROM staging.lieux WHERE code = 'LOK'));
 
 -- Distances (in km) - network with some indirect routes
 -- Direct routes from airport
-INSERT INTO dev.distance ("from", "to", distance, unite) VALUES
-((SELECT id FROM dev.lieux WHERE code = 'AIR'), (SELECT id FROM dev.lieux WHERE code = 'COL'), 15.5, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'AIR'), (SELECT id FROM dev.lieux WHERE code = 'NOV'), 12.3, 'km'),
+INSERT INTO staging.distance ("from", "to", distance, unite) VALUES
+((SELECT id FROM staging.lieux WHERE code = 'AIR'), (SELECT id FROM staging.lieux WHERE code = 'COL'), 15.5, 'km'),
+((SELECT id FROM staging.lieux WHERE code = 'AIR'), (SELECT id FROM staging.lieux WHERE code = 'NOV'), 12.3, 'km'),
 -- No direct route from AIR to IBI - must go through NOV
 -- No direct route from AIR to LOK - must go through intermediates
 
--- Routes between dev.hotels
-((SELECT id FROM dev.lieux WHERE code = 'NOV'), (SELECT id FROM dev.lieux WHERE code = 'IBI'), 8.2, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'NOV'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 14.5, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'COL'), (SELECT id FROM dev.lieux WHERE code = 'IBI'), 10.0, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'COL'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 12.0, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'IBI'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 9.5, 'km');
+-- Routes between staging.hotels
+((SELECT id FROM staging.lieux WHERE code = 'NOV'), (SELECT id FROM staging.lieux WHERE code = 'IBI'), 8.2, 'km'),
+((SELECT id FROM staging.lieux WHERE code = 'NOV'), (SELECT id FROM staging.lieux WHERE code = 'LOK'), 14.5, 'km'),
+((SELECT id FROM staging.lieux WHERE code = 'COL'), (SELECT id FROM staging.lieux WHERE code = 'IBI'), 10.0, 'km'),
+((SELECT id FROM staging.lieux WHERE code = 'COL'), (SELECT id FROM staging.lieux WHERE code = 'LOK'), 12.0, 'km'),
+((SELECT id FROM staging.lieux WHERE code = 'IBI'), (SELECT id FROM staging.lieux WHERE code = 'LOK'), 9.5, 'km');
 
 -- Shortest paths (calculated by Dijkstra):
 -- AIR -> COL: 15.5 km (direct)
@@ -35,11 +35,11 @@ INSERT INTO dev.distance ("from", "to", distance, unite) VALUES
 -- AIR -> LOK: 26.8 km (AIR -> NOV -> LOK = 12.3 + 14.5)
 
 -- Average speed parameter (km/h)
-INSERT INTO dev.param (cle, valeur) VALUES
+INSERT INTO staging.param (cle, valeur) VALUES
 ('vm', '60');
 
 -- Vehicles (different capacities and fuel types for assignment testing)
-INSERT INTO dev.vehicule (reference, place, type_carburant) VALUES
+INSERT INTO staging.vehicule (reference, place, type_carburant) VALUES
 ('VAN-15D', 15, 'D'),      -- Diesel van, 15 seats
 ('VAN-12D', 12, 'D'),      -- Diesel van, 12 seats
 ('MINIBUS-20E', 20, 'E'),  -- Electric minibus, 20 seats
@@ -48,7 +48,7 @@ INSERT INTO dev.vehicule (reference, place, type_carburant) VALUES
 ('VAN-8D', 8, 'D'),        -- Diesel van, 8 seats
 ('CAR-5D', 5, 'D');        -- Diesel car, 5 seats
 
-INSERT INTO dev.reservation(id_client, nb_passager, date_heure_arrivee, id_hotel) VALUES
+INSERT INTO staging.reservation(id_client, nb_passager, date_heure_arrivee, id_hotel) VALUES
 ('4631', 11, '2026-02-05 00:01', 3),
 ('4394', 1, '2026-02-05 23:55', 3),
 ('8054', 2, '2026-02-09 10:17', 1),
