@@ -10,6 +10,7 @@
     List<AssignationWithDetails> assignations = (List<AssignationWithDetails>) request.getAttribute("assignations");
     List<Reservation> unassignedReservations = (List<Reservation>) request.getAttribute("unassignedReservations");
     Map<Integer, String> hotelMap = (Map<Integer, String>) request.getAttribute("hotelMap");
+    Integer assignedCount = (Integer) request.getAttribute("assignedCount");
     
     DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -22,6 +23,12 @@
            style="padding: 8px 16px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px; display: inline-block;">
             ← Retour
         </a>
+        
+        <% if (assignedCount != null && assignedCount > 0) { %>
+            <div style="margin-top: 15px; padding: 10px; background-color: #d4edda; color: #155724; border-radius: 5px;">
+                ✓ <%= assignedCount %> réservation(s) assignée(s) automatiquement.
+            </div>
+        <% } %>
     </div>
     
     <div class="tables-container">

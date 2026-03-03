@@ -20,7 +20,7 @@ public class HotelRepository {
 
     public List<Hotel> findAll() {
         List<Hotel> list = new ArrayList<>();
-        String sql = "SELECT id, nom FROM hotel";
+        String sql = "SELECT id, nom, id_lieu FROM hotel";
         try (Connection c = ds.getConnection();
                 PreparedStatement ps = c.prepareStatement(sql);
                 ResultSet rs = ps.executeQuery()) {
@@ -29,6 +29,7 @@ public class HotelRepository {
                 Hotel h = new Hotel();
                 h.setId(rs.getInt("id"));
                 h.setNom(rs.getString("nom"));
+                h.setIdLieu(rs.getInt("id_lieu"));
                 list.add(h);
             }
 
@@ -39,7 +40,7 @@ public class HotelRepository {
     }
 
     public Hotel findById(int id) {
-        String sql = "SELECT id, nom FROM hotel WHERE id = ?";
+        String sql = "SELECT id, nom, id_lieu FROM hotel WHERE id = ?";
         try (Connection c = ds.getConnection();
                 PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -48,6 +49,7 @@ public class HotelRepository {
                     Hotel h = new Hotel();
                     h.setId(rs.getInt("id"));
                     h.setNom(rs.getString("nom"));
+                    h.setIdLieu(rs.getInt("id_lieu"));
                     return h;
                 }
             }

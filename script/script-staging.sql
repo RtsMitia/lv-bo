@@ -1,6 +1,13 @@
+CREATE TABLE IF NOT EXISTS staging.lieux (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(10),
+    libelle VARCHAR(100)
+);
+
 CREATE TABLE IF NOT EXISTS staging.hotel (
     id SERIAL PRIMARY KEY,
-    nom VARCHAR(50)
+    nom VARCHAR(50),
+    id_lieu INT REFERENCES staging.lieux(id)
 );
 
 CREATE TABLE IF NOT EXISTS staging.reservation (
@@ -33,8 +40,9 @@ CREATE TABLE IF NOT EXISTS staging.param (
 
 CREATE TABLE IF NOT EXISTS staging.distance (
     id SERIAL PRIMARY KEY,
-    "from" INT REFERENCES staging.hotel(id),
-    "to" INT REFERENCES staging.hotel(id),
+    "from" INT REFERENCES staging.lieux(id),
+    "to" INT REFERENCES staging.lieux(id),
+    distance NUMERIC(10,2),
     unite VARCHAR(50)
 );
 

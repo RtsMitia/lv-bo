@@ -59,4 +59,24 @@ public class AssignationDetailRepository {
         }
         return list;
     }
+
+    /**
+     * Create a new assignation detail linking a reservation to an assignation
+     */
+    public void createDetail(Integer assignationId, Integer reservationId, Integer nbPersPrises) {
+        String sql = "INSERT INTO assignation_detail (id_association, id_reservation, nb_pers_prises) VALUES (?, ?, ?)";
+        
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            
+            ps.setInt(1, assignationId);
+            ps.setInt(2, reservationId);
+            ps.setInt(3, nbPersPrises);
+            
+            ps.executeUpdate();
+            
+        } catch (SQLException e) {
+            throw new RuntimeException("Error creating assignation detail", e);
+        }
+    }
 }

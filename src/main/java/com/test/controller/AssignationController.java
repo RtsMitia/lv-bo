@@ -6,66 +6,59 @@ import com.test.model.Reservation;
 import com.test.repository.AssignationRepository;
 import com.test.repository.HotelRepository;
 import com.test.repository.ReservationRepository;
+import com.test.service.AssignationService;
+import com.fw.annotations.AnnotationController;
+import com.fw.annotations.ManageUrl;
+import com.fw.annotations.MyGET;
+import com.fw.ModelView;
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@WebServlet(name = "AssignationController", urlPatterns = { "/assignation/*" })
-public class AssignationController extends HttpServlet {
+@AnnotationController("/assignation")
+public class AssignationController {
 
     private final AssignationRepository assignationRepository = new AssignationRepository();
     private final ReservationRepository reservationRepository = new ReservationRepository();
     private final HotelRepository hotelRepository = new HotelRepository();
+    private final AssignationService assignationService = new AssignationService();
 
-    @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String path = req.getPathInfo();
-
-        if (path == null || path.equals("/") || path.equals("/date")) {
-            showDateForm(req, resp);
-        } else if (path.equals("/list")) {
-            showAssignationList(req, resp);
-        } else {
-            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
-        }
+    @ManageUrl("")
+    @MyGET
+    public ModelView index() {
+        return showDateForm();
     }
 
-    @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        doGet(req, resp);
+    @ManageUrl("/date")
+    @MyGET
+    public ModelView showDateForm() {
+        ModelView mv = new ModelView("layout.jsp");
+        mv.addItem("content", "assignation/assignation_date_form.jsp");
+        return mv;
     }
 
-
-    private void showDateForm(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        req.setAttribute("content", "/WEB-INF/views/assignation/assignation_date_form.jsp");
-        req.getRequestDispatcher("/WEB-INF/views/layout.jsp").forward(req, resp);
-    }
-
-
-    private void showAssignationList(HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
-        String dateParam = req.getParameter("date");
-
-        if (dateParam == null || dateParam.isEmpty()) {
-            resp.sendRedirect(req.getContextPath() + "/assignation/date");
-            return;
+    @ManageUrl("/list")
+    @MyGET
+    public ModelView showAssignationList(String date) {
+        if (date == null || date.isEmpty()) {
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("content", "assignation/assignation_date_form.jsp");
+            mv.addItem("error", "Veuillez sélectionner une date");
+            return mv;
         }
 
         try {
-            LocalDate date = LocalDate.parse(dateParam, DateTimeFormatter.ISO_DATE);
+            LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
 
-            List<AssignationWithDetails> assignations = assignationRepository.findWithDetailsByDate(date);
+            // Automatically assign unassigned reservations before displaying
+            int assignedCount = assignationService.assignReservationsForDate(localDate);
 
-            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(date);
+            List<AssignationWithDetails> assignations = assignationRepository.findWithDetailsByDate(localDate);
+
+            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
 
             Map<Integer, String> hotelMap = new HashMap<>();
             List<Hotel> hotels = hotelRepository.findAll();
@@ -73,19 +66,22 @@ public class AssignationController extends HttpServlet {
                 hotelMap.put(h.getId(), h.getNom());
             }
 
-            req.setAttribute("date", date);
-            req.setAttribute("dateFormatted", date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-            req.setAttribute("assignations", assignations);
-            req.setAttribute("unassignedReservations", unassignedReservations);
-            req.setAttribute("hotelMap", hotelMap);
-            req.setAttribute("content", "/WEB-INF/views/assignation/assignation_list.jsp");
-            req.getRequestDispatcher("/WEB-INF/views/layout.jsp").forward(req, resp);
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("date", localDate);
+            mv.addItem("dateFormatted", localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            mv.addItem("assignations", assignations);
+            mv.addItem("unassignedReservations", unassignedReservations);
+            mv.addItem("hotelMap", hotelMap);
+            mv.addItem("assignedCount", assignedCount);
+            mv.addItem("content", "assignation/assignation_list.jsp");
+            return mv;
 
         } catch (Exception e) {
             e.printStackTrace();
-            req.setAttribute("error", "Erreur lors de la récupération des données: " + e.getMessage());
-            req.setAttribute("content", "/WEB-INF/views/assignation/assignation_date_form.jsp");
-            req.getRequestDispatcher("/WEB-INF/views/layout.jsp").forward(req, resp);
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("error", "Erreur lors de la récupération des données: " + e.getMessage());
+            mv.addItem("content", "assignation/assignation_date_form.jsp");
+            return mv;
         }
     }
 }

@@ -157,4 +157,31 @@ public class AssignationRepository {
 
         return list;
     }
+
+    /**
+     * Create a new assignation (vehicle trip) and return the generated ID
+     */
+    public Integer createAssignation(Integer vehiculeId, java.time.LocalDateTime departAeroport, java.time.LocalDateTime retourAeroport) {
+        String sql = "INSERT INTO assignation (vehicule, depart_aeroport, retour_aeroport) VALUES (?, ?, ?)";
+        
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            
+            ps.setInt(1, vehiculeId);
+            ps.setTimestamp(2, Timestamp.valueOf(departAeroport));
+            ps.setTimestamp(3, Timestamp.valueOf(retourAeroport));
+            
+            ps.executeUpdate();
+            
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+            
+        } catch (SQLException e) {
+            throw new RuntimeException("Error creating assignation", e);
+        }
+        return null;
+    }
 }

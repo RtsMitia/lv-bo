@@ -1,6 +1,13 @@
+CREATE TABLE IF NOT EXISTS lieux (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(10),
+    libelle VARCHAR(100)
+);
+
 CREATE TABLE IF NOT EXISTS hotel (
     id SERIAL PRIMARY KEY,
-    nom VARCHAR(50)
+    nom VARCHAR(50),
+    id_lieu INT REFERENCES lieux(id)
 );
 
 CREATE TABLE IF NOT EXISTS reservation (
@@ -33,8 +40,9 @@ CREATE TABLE IF NOT EXISTS param (
 
 CREATE TABLE IF NOT EXISTS distance (
     id SERIAL PRIMARY KEY,
-    "from" INT REFERENCES hotel(id),
-    "to" INT REFERENCES hotel(id),
+    "from" INT REFERENCES lieux(id),
+    "to" INT REFERENCES lieux(id),
+    distance NUMERIC(10,2),
     unite VARCHAR(50)
 );
 
