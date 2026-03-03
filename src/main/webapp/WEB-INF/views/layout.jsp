@@ -34,6 +34,13 @@
                     <li><a href="${pageContext.request.contextPath}/vehicule/form">New vehicule</a></li>
                 </ul>
             </div>
+
+            <div class="dropdown" onclick="toggle('menu-assignation')">Assignation ▾</div>
+            <div id="menu-assignation" class="dropdown-items">
+                <ul>
+                    <li><a href="${pageContext.request.contextPath}/assignation/date">Voir les trajets par date</a></li>
+                </ul>
+            </div>
         </aside>
 
         <main class="bo-content">
