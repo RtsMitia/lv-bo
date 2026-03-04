@@ -71,6 +71,7 @@ public class AssignationService {
                 }
             }
 
+            boolean updateRetour = calculateAndUpdateRetourAeroport(assignations);
         }
 
         return assignations.size();
