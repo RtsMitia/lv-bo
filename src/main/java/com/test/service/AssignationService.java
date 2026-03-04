@@ -184,7 +184,7 @@ public class AssignationService {
             
             String type1 = v1.getTypeCarburant();
             String type2 = v2.getTypeCarburant();
-            
+
             if ("D".equalsIgnoreCase(type1) && !"D".equalsIgnoreCase(type2)) {
                 return -1; 
             } else if (!"D".equalsIgnoreCase(type1) && "D".equalsIgnoreCase(type2)) {
@@ -195,5 +195,81 @@ public class AssignationService {
         });
 
         return vehicles.get(0); 
+    }
+
+    public boolean calculateAndUpdateRetourAeroport(List<Assignation> assignations) {
+        boolean allSuccess = true;
+
+        try {
+            for (Assignation a : assignations) {
+                boolean success = calculateAndUpdateRetourAeroport(a);
+                if (!success) {
+                    allSuccess = false;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error processing assignations: " + e.getMessage());
+            throw e;
+        }
+
+        return allSuccess;
+    }
+
+    public boolean calculateAndUpdateRetourAeroport(Assignation assignation) {
+        try {
+            LocalDateTime newRetour = calculateRetourAeroport(assignation);
+            return assignationRepo.updateHeureRetourAeroport(assignation.getId(), newRetour);
+        } catch (Exception e) {
+            System.err.println("Error calculating/updating retour_aeroport for assignation " + assignation.getId()
+                    + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    public LocalDateTime calculateRetourAeroport(Assignation a) throws Exception {
+        Trajet trajet = findTrajet(a.getId());
+        String vmString = paramRepo.getValueByKey("vm");
+        if (vmString == null) {
+            throw new RuntimeException("Parameter 'vm' not found in database");
+        }
+        double vm = Double.parseDouble(vmString);
+        double roundTripHours = (trajet.getDistance().doubleValue() * 2) / vm;
+        return a.getDepartAeroport().plusMinutes((long) (roundTripHours * 60));
+    }
+
+    
+    public List<Integer> findLieuxIds(Integer assignationId) throws Exception {
+        return assignationRepo.findLieuxIds(assignationId);
+    }
+
+    public Map.Entry<Integer, BigDecimal> findNearestLieu(Integer lieuDepart, List<Integer> lieuxIds) throws Exception {
+        return distanceRepo.findNearest(lieuDepart, lieuxIds);
+    }
+
+    public Trajet findTrajet(Integer assignationId) throws Exception {
+        try {
+            BigDecimal totalDistance = BigDecimal.ZERO;
+            List<Integer> lieuxIds = findLieuxIds(assignationId);
+            List<Integer> sortedLieux = new ArrayList<>();
+            List<Integer> tempList = new ArrayList<>(lieuxIds);
+            Integer currentPoint = distanceRepo.getLieuIdByCode("AIR");
+
+            while (!tempList.isEmpty()) {
+                Map.Entry<Integer, BigDecimal> nearest = findNearestLieu(currentPoint, tempList);
+                if (nearest == null) {
+                    break;
+                }
+                sortedLieux.add(nearest.getKey());
+                tempList.remove(nearest.getKey());
+                currentPoint = nearest.getKey();
+                totalDistance = totalDistance.add(nearest.getValue());
+            }
+
+            return new Trajet(totalDistance, sortedLieux);
+
+        } catch (Exception e) {
+            System.err.println("Error finding trajet for assignation " + assignationId + ": " + e.getMessage());
+            throw e;
+        }
     }
 }

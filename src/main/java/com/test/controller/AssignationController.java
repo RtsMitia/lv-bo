@@ -3,8 +3,10 @@ package com.test.controller;
 import com.test.dto.AssignationWithDetails;
 import com.test.model.Hotel;
 import com.test.model.Reservation;
+import com.test.model.Trajet;
 import com.test.repository.AssignationRepository;
 import com.test.repository.HotelRepository;
+import com.test.repository.LieuRepository;
 import com.test.repository.ReservationRepository;
 import com.test.service.AssignationService;
 import com.fw.annotations.AnnotationController;
@@ -12,6 +14,7 @@ import com.fw.annotations.ManageUrl;
 import com.fw.annotations.MyGET;
 import com.fw.ModelView;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -25,6 +28,7 @@ public class AssignationController {
     private final ReservationRepository reservationRepository = new ReservationRepository();
     private final HotelRepository hotelRepository = new HotelRepository();
     private final AssignationService assignationService = new AssignationService();
+    private final LieuRepository lieuRepository = new LieuRepository();
 
     @ManageUrl("")
     @MyGET
@@ -82,6 +86,52 @@ public class AssignationController {
             mv.addItem("error", "Erreur lors de la récupération des données: " + e.getMessage());
             mv.addItem("content", "assignation/assignation_date_form.jsp");
             return mv;
+        }
+    }
+
+    @ManageUrl("/detail/{id}")
+    @MyGET
+    public ModelView showDetail(int id, String date) {
+        try {
+            Trajet trajet = assignationService.findTrajet(id);
+            BigDecimal totalDistance = trajet.getDistance();
+            List<String> lieux = lieuRepository.getLibelle(trajet.getLieuxIds());
+            AssignationWithDetails assignationDetails = assignationRepository.getDetailAssignation(id);
+
+            java.time.LocalDate localDate = null;
+            if (date != null && !date.isEmpty()) {
+                try {
+                    localDate = java.time.LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
+                } catch (Exception ex) {
+                    localDate = null;
+                }
+            }
+
+            if (localDate == null && assignationDetails != null && assignationDetails.getReservations() != null
+                    && !assignationDetails.getReservations().isEmpty()) {
+                java.time.LocalDateTime dt = assignationDetails.getReservations().get(0).getDateHeureArrivee();
+                if (dt != null) {
+                    localDate = dt.toLocalDate();
+                }
+            }
+
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("trajet", trajet);
+            mv.addItem("totalDistance", totalDistance);
+            mv.addItem("lieux", lieux);
+            mv.addItem("assignationDetails", assignationDetails);
+
+            if (localDate != null) {
+                mv.addItem("date", localDate);
+                mv.addItem("dateFormatted", localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                mv.addItem("dateParam", localDate.format(DateTimeFormatter.ISO_DATE));
+            }
+
+            mv.addItem("content", "assignation/trajet_detail.jsp");
+            return mv;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return showAssignationList(date);
         }
     }
 }
