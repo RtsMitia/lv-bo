@@ -90,7 +90,7 @@
                 <artifactId>maven-war-plugin</artifactId>
                 <version>3.4.0</version>
                 <configuration>
-                    <webXml>src\main\webapp\WEB-INF\web.xml</webXml>
+                    <!-- <webXml>src\main\webapp\WEB-INF\web.xml</webXml> -->
                 </configuration>
             </plugin>
         </plugins>

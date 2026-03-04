@@ -1,5 +1,6 @@
 package com.test.service;
 
+import com.test.dto.AssignationWithDetails;
 import com.test.model.*;
 import com.test.repository.*;
 
@@ -34,9 +35,6 @@ public class AssignationService {
         this.assignationDetailRepo = new AssignationDetailRepository();
     }
 
-    /**
-     * Automatically assign vehicles to all unassigned reservations for a specific date
-     */
     public int assignReservationsForDate(LocalDate date) throws Exception {
         // Get average velocity from param
         String vmString = paramRepo.getValueByKey("vm");
@@ -45,37 +43,42 @@ public class AssignationService {
         }
         double vm = Double.parseDouble(vmString);
 
-        // Get all reservations for this date that don't have an assignation yet
         List<Reservation> unassignedReservations = getUnassignedReservationsForDate(date);
-
-        // Sort by date_heure_arrivee (earliest first)
         unassignedReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
-        int assignedCount = 0;
-
-        // Process each reservation
-        for (Reservation reservation : unassignedReservations) {
-            try {
-                boolean assigned = assignReservation(reservation, vm, date);
-                if (assigned) {
-                    assignedCount++;
-                }
-            } catch (Exception e) {
-                System.err.println("Error assigning reservation " + reservation.getId() + ": " + e.getMessage());
-                // Continue with next reservation
+        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
+        for(Reservation r : unassignedReservations) {
+            LocalDateTime key = r.getDateHeureArrivee();
+            List<Reservation> list = groups.get(key);
+            if(list == null) {
+                list = new ArrayList<>();
+                groups.put(key, list);
             }
+            list.add(r);
         }
 
-        return assignedCount;
+        for (List<Reservation> reservations : groups.values()) {
+            reservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed()); // pr que le nb de passager soit decroissant
+        }
+
+        List<Assignation> assignations = new ArrayList<>();
+        for(LocalDateTime dateEntry : groups.keySet()) {
+            List<Reservation> reservations = groups.get(dateEntry);
+            for (Reservation r : reservations) {
+                Assignation a = assignReservation(r, date);
+                if (assignations.stream().noneMatch(x -> x.getId().equals(a.getId()))) {
+                    assignations.add(a);
+                }
+            }
+
+        }
+
+        return assignations.size();
     }
 
-    /**
-     * Get reservations for a date that don't have an assignation detail yet
-     */
     private List<Reservation> getUnassignedReservationsForDate(LocalDate date) {
         List<Reservation> allReservations = reservationRepo.findByDate(date);
         
-        // Filter out reservations that already have an assignation_detail
         List<Reservation> unassigned = new ArrayList<>();
         for (Reservation r : allReservations) {
             if (!hasAssignation(r.getId())) {
@@ -86,11 +89,7 @@ public class AssignationService {
         return unassigned;
     }
 
-    /**
-     * Check if a reservation has an assignation detail
-     */
     private boolean hasAssignation(Integer reservationId) {
-        // Query to check if reservation is in assignation_detail
         try {
             List<AssignationDetail> allDetails = assignationDetailRepo.findAll();
             for (AssignationDetail detail : allDetails) {
@@ -104,166 +103,97 @@ public class AssignationService {
         }
     }
 
-    /**
-     * Assign a single reservation to an available vehicle
-     */
-    private boolean assignReservation(Reservation reservation, double vm, LocalDate date) throws Exception {
-        // Get hotel and its lieu
-        Hotel hotel = hotelRepo.findById(reservation.getIdHotel());
-        if (hotel == null || hotel.getIdLieu() == null) {
-            System.err.println("Hotel not found or has no lieu for reservation " + reservation.getId());
-            return false;
+    private Vehicule trouverNouveauVehicule(Reservation r, LocalDate date) {
+        List<Vehicule> all = vehiculeRepo.findAll();
+        List<Vehicule> pasDansMap = new ArrayList<>();
+        Set<Integer> usedVehiculeIds = new HashSet<>();
+
+        for (AssignationWithDetails awd : assignationRepo.findWithDetailsByDate(date)) {
+            if (awd.getVehiculeId() != null) {
+                usedVehiculeIds.add(awd.getVehiculeId());
+            }
         }
 
-        // Get lieu code for distance lookup
-        Lieu hotelLieu = lieuRepo.getById(hotel.getIdLieu());
-        if (hotelLieu == null) {
-            System.err.println("Lieu not found for hotel " + hotel.getId());
-            return false;
+        for (Vehicule v : all) {
+            if (!usedVehiculeIds.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
+                pasDansMap.add(v);
+            }
         }
 
-        // Get distance from airport to hotel
-        BigDecimal distanceKm = distanceRepo.findDistanceFromAirportToLieu(hotelLieu.getCode());
-        if (distanceKm == null) {
-            System.err.println("Distance not found from airport to lieu " + hotelLieu.getCode());
-            return false;
+        if (pasDansMap.isEmpty()) {
+            return null;
         }
 
-        // Calculate retour_aeroport = depart_aeroport + (distance * 2 / vm) hours
-        LocalDateTime departAeroport = reservation.getDateHeureArrivee();
-        double roundTripHours = (distanceKm.doubleValue() * 2) / vm;
-        LocalDateTime retourAeroport = departAeroport.plusMinutes((long) (roundTripHours * 60));
-
-        // Find available vehicles that can fit the passengers
-        List<Vehicule> availableVehicles = findAvailableVehicles(
-            reservation.getNbPassager(),
-            departAeroport,
-            retourAeroport,
-            date
-        );
-
-        if (availableVehicles.isEmpty()) {
-            System.err.println("No available vehicle for reservation " + reservation.getId());
-            return false;
-        }
-
-        // Select best-fit vehicle (smallest capacity that fits, prefer Diesel)
-        Vehicule bestVehicle = selectBestVehicle(availableVehicles, reservation.getNbPassager());
-
-        // Create assignation
-        Integer assignationId = assignationRepo.createAssignation(
-            bestVehicle.getId(),
-            departAeroport,
-            retourAeroport
-        );
-
-        if (assignationId == null) {
-            System.err.println("Failed to create assignation for reservation " + reservation.getId());
-            return false;
-        }
-
-        // Create assignation detail
-        assignationDetailRepo.createDetail(
-            assignationId,
-            reservation.getId(),
-            reservation.getNbPassager()
-        );
-
-        return true;
+        return selectBestVehicle(pasDansMap, r.getNbPassager());
     }
 
-    /**
-     * Find vehicles that are available and can fit the required passengers
-     */
-    private List<Vehicule> findAvailableVehicles(
-        Integer requiredCapacity,
-        LocalDateTime departAeroport,
-        LocalDateTime retourAeroport,
-        LocalDate date
-    ) {
-        // Get all vehicles
-        List<Vehicule> allVehicles = vehiculeRepo.findAll();
-
-        // Get all assignations for this date to check availability
-        List<Assignation> assignations = assignationRepo.findAll();
-
-        // Filter vehicles that can fit passengers and are available
-        List<Vehicule> availableVehicles = new ArrayList<>();
-        
-        for (Vehicule vehicule : allVehicles) {
-            // Check capacity
-            if (vehicule.getPlace() < requiredCapacity) {
-                continue;
+    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) {
+        List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDate(date);
+        Map<Integer, List<AssignationWithDetails>> assignationMap = new HashMap<>();
+        for (AssignationWithDetails a : vehiculesDispos) {
+            if (!assignationMap.containsKey(a.getAssignationId())) {
+                assignationMap.put(a.getAssignationId(), new ArrayList<>());
             }
+            assignationMap.get(a.getAssignationId()).add(a);
+        }
 
-            // Check if vehicle is available (no time overlap with existing assignations)
-            boolean isAvailable = isVehiculeAvailable(vehicule.getId(), departAeroport, retourAeroport, assignations);
-            
-            if (isAvailable) {
-                availableVehicles.add(vehicule);
+        int plusPetit = Integer.MAX_VALUE;
+        int idAssignationBest = 0;
+        boolean trouve = false;
+
+        for (int idEntry : assignationMap.keySet()) {
+            int restePlace = assignationMap.get(idEntry).get(0).getRestePlace();
+            if (restePlace >= r.getNbPassager() && restePlace < plusPetit) {
+                plusPetit = restePlace;
+                idAssignationBest = idEntry;
+                trouve = true;
             }
         }
 
-        return availableVehicles;
-    }
-
-    /**
-     * Check if a vehicle is available during a time window
-     */
-    private boolean isVehiculeAvailable(
-        Integer vehiculeId,
-        LocalDateTime requestedDepart,
-        LocalDateTime requestedRetour,
-        List<Assignation> assignations
-    ) {
-        for (Assignation assignation : assignations) {
-            if (!assignation.getVehicule().equals(vehiculeId)) {
-                continue;
-            }
-
-            LocalDateTime existingDepart = assignation.getDepartAeroport();
-            LocalDateTime existingRetour = assignation.getRetourAeroport();
-
-            // Check for time overlap
-            // Overlap occurs if:
-            // - requestedDepart is between existingDepart and existingRetour
-            // - requestedRetour is between existingDepart and existingRetour
-            // - requested window completely contains existing window
-            boolean overlap = 
-                (requestedDepart.isBefore(existingRetour) && requestedRetour.isAfter(existingDepart));
-
-            if (overlap) {
-                return false; // Vehicle is busy
-            }
+        if (trouve) {
+            return assignationRepo.findById(idAssignationBest);
         }
 
-        return true; // Vehicle is available
+        return null;
     }
 
-    /**
-     * Select the best vehicle: smallest capacity that fits, prefer Diesel for ties
-     */
+    public Assignation assignReservation(Reservation reservation, LocalDate date) throws Exception {
+        Assignation existante = assignationExistanteDisponible(reservation, date);
+        if (existante != null) {
+            assignationDetailRepo.createDetail(existante.getId(), reservation.getId(), reservation.getNbPassager());
+            return existante;
+        }
+
+        Vehicule vehicule = trouverNouveauVehicule(reservation, date);
+        if (vehicule == null) {
+            System.err.println("Aucun véhicule disponible pour la réservation " + reservation.getId());
+            return null;
+        }
+        Integer newId = assignationRepo.createAssignation(vehicule.getId(), reservation.getDateHeureArrivee(), null);
+        assignationDetailRepo.createDetail(newId, reservation.getId(), reservation.getNbPassager());
+
+        return assignationRepo.findById(newId);
+    }
+
     private Vehicule selectBestVehicle(List<Vehicule> vehicles, Integer requiredCapacity) {
-        // Sort by place (ascending), then by type_carburant (D comes before others)
         vehicles.sort((v1, v2) -> {
             int placeCompare = Integer.compare(v1.getPlace(), v2.getPlace());
             if (placeCompare != 0) {
                 return placeCompare;
             }
             
-            // If same capacity, prefer Diesel
             String type1 = v1.getTypeCarburant();
             String type2 = v2.getTypeCarburant();
             
             if ("D".equalsIgnoreCase(type1) && !"D".equalsIgnoreCase(type2)) {
-                return -1; // v1 comes first
+                return -1; 
             } else if (!"D".equalsIgnoreCase(type1) && "D".equalsIgnoreCase(type2)) {
-                return 1; // v2 comes first
+                return 1; 
             }
             
-            return 0; // Same priority
+            return 0; 
         });
 
-        return vehicles.get(0); // Return the best one
+        return vehicles.get(0); 
     }
 }
