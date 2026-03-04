@@ -4,6 +4,7 @@
 <%@ page import="java.util.List" %>
 <%@ page import="java.util.Map" %>
 <%@ page import="java.time.format.DateTimeFormatter" %>
+<%@ page import="java.time.LocalDate" %>
 
 <%
     String dateFormatted = (String) request.getAttribute("dateFormatted");
@@ -14,6 +15,12 @@
     
     DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    java.time.LocalDate dateObj = (java.time.LocalDate) request.getAttribute("date");
+    String dateParam = null;
+    if (dateObj != null) {
+        dateParam = dateObj.format(java.time.format.DateTimeFormatter.ISO_DATE);
+    }
 %>
 
 <div class="assignation-list">
@@ -52,8 +59,12 @@
                         <% for (AssignationWithDetails assignation : assignations) { %>
                             <tr>
                                 <td>
-                                    <strong><%= assignation.getVehiculeReference() %></strong><br/>
+                                    <a href="${pageContext.request.contextPath}/assignation/detail/<%= assignation.getAssignationId() %><%= dateParam != null ? ("?date=" + dateParam) : "" %>" style="color:inherit; text-decoration:none;">
+                                        <strong><%= assignation.getVehiculeReference() %></strong>
+                                    </a><br/>
                                     <small>(Capacité: <%= assignation.getVehiculePlace() %> places)</small>
+                                    <br/>
+                                    <a href="${pageContext.request.contextPath}/assignation/detail/<%= assignation.getAssignationId() %><%= dateParam != null ? ("?date=" + dateParam) : "" %>" style="margin-top:6px; display:inline-block; padding:6px 10px; background:#007bff; color:#fff; text-decoration:none; border-radius:4px; font-size:12px;">Détails</a>
                                 </td>
                                 <td>
                                     <% 

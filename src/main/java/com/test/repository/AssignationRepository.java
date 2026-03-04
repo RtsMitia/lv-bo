@@ -71,7 +71,6 @@ public class AssignationRepository {
         return null;
     }
 
-
     public List<AssignationWithDetails> findWithDetailsByDate(LocalDate date) {
         List<AssignationWithDetails> list = new ArrayList<>();
         Map<Integer, AssignationWithDetails> assignationMap = new HashMap<>();
@@ -161,27 +160,151 @@ public class AssignationRepository {
     /**
      * Create a new assignation (vehicle trip) and return the generated ID
      */
-    public Integer createAssignation(Integer vehiculeId, java.time.LocalDateTime departAeroport, java.time.LocalDateTime retourAeroport) {
+    public Integer createAssignation(Integer vehiculeId, java.time.LocalDateTime departAeroport,
+            java.time.LocalDateTime retourAeroport) {
         String sql = "INSERT INTO assignation (vehicule, depart_aeroport, retour_aeroport) VALUES (?, ?, ?)";
-        
+
         try (Connection c = ds.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            
+                PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
             ps.setInt(1, vehiculeId);
             ps.setTimestamp(2, Timestamp.valueOf(departAeroport));
             ps.setTimestamp(3, Timestamp.valueOf(retourAeroport));
-            
+
             ps.executeUpdate();
-            
+
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) {
                     return rs.getInt(1);
                 }
             }
-            
+
         } catch (SQLException e) {
             throw new RuntimeException("Error creating assignation", e);
         }
         return null;
+    }
+
+    public boolean updateHeureRetourAeroport(Integer assignationId, java.time.LocalDateTime retourAeroport) {
+        String sql = "UPDATE assignation SET retour_aeroport = ? WHERE id = ?";
+
+        try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(retourAeroport));
+            ps.setInt(2, assignationId);
+
+            int rowsAffected = ps.executeUpdate();
+            return rowsAffected > 0;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Error updating retour_aeroport for assignation id " + assignationId, e);
+        }
+    }
+
+    public List<Integer> findLieuxIds(Integer assignationId) {
+        String sql = "SELECT DISTINCT h.id_lieu FROM assignation a " +
+                "JOIN assignation_detail ad ON a.id = ad.id_association " +
+                "JOIN reservation r ON ad.id_reservation = r.id " +
+                "JOIN hotel h ON r.id_hotel = h.id " +
+                "WHERE a.id = ?";
+
+        List<Integer> lieuxIds = new ArrayList<>();
+        try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setInt(1, assignationId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    lieuxIds.add(rs.getInt("id_lieu"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error fetching lieux ids for assignation id " + assignationId, e);
+        }
+        return lieuxIds;
+    }
+
+    public AssignationWithDetails getDetailAssignation(Integer assignationId) throws Exception {
+        if (assignationId == null) {
+            throw new IllegalArgumentException("assignationId is null");
+        }
+
+        String sql = "SELECT " +
+                "a.id AS assignation_id, " +
+                "a.vehicule AS vehicule_id, " +
+                "a.nom_vehicule, " +
+                "a.vehicule_place, " +
+                "a.depart_aeroport, " +
+                "a.retour_aeroport, " +
+                "a.total_passagers, " +
+                "a.reste_place, " +
+                "ad.id_reservation, " +
+                "ad.nb_pers_prises, " +
+                "r.id_client, " +
+                "r.nb_passager, " +
+                "r.date_heure_arrivee, " +
+                "r.id_hotel, " +
+                "h.nom AS hotel_nom " +
+                "FROM assignation_lib a " +
+                "LEFT JOIN assignation_detail ad ON ad.id_association = a.id " +
+                "LEFT JOIN reservation r ON r.id = ad.id_reservation " +
+                "LEFT JOIN hotel h ON h.id = r.id_hotel " +
+                "WHERE a.id = ? " +
+                "ORDER BY a.id, ad.id_reservation";
+
+        try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setInt(1, assignationId);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                AssignationWithDetails assignation = null;
+                while (rs.next()) {
+                    if (assignation == null) {
+                        assignation = new AssignationWithDetails();
+                        assignation.setAssignationId(rs.getInt("assignation_id"));
+                        assignation.setVehiculeId(rs.getInt("vehicule_id"));
+                        assignation.setVehiculeReference(rs.getString("nom_vehicule"));
+                        assignation.setVehiculePlace(rs.getInt("vehicule_place"));
+
+                        Timestamp departTs = rs.getTimestamp("depart_aeroport");
+                        if (departTs != null)
+                            assignation.setDepartAeroport(departTs.toLocalDateTime());
+
+                        Timestamp retourTs = rs.getTimestamp("retour_aeroport");
+                        if (retourTs != null)
+                            assignation.setRetourAeroport(retourTs.toLocalDateTime());
+
+                        assignation.setTotalPassagers(rs.getInt("total_passagers"));
+                        assignation.setRestePlace(rs.getInt("reste_place"));
+                    }
+
+                    Integer reservationId = (Integer) rs.getObject("id_reservation");
+                    if (reservationId != null) {
+                        AssignationWithDetails.ReservationWithHotel reservation = new AssignationWithDetails.ReservationWithHotel();
+                        reservation.setReservationId(reservationId);
+                        reservation.setIdClient(rs.getString("id_client"));
+                        reservation.setNbPassager(rs.getInt("nb_passager"));
+
+                        Timestamp dateHeureTs = rs.getTimestamp("date_heure_arrivee");
+                        if (dateHeureTs != null)
+                            reservation.setDateHeureArrivee(dateHeureTs.toLocalDateTime());
+
+                        reservation.setIdHotel((Integer) rs.getObject("id_hotel"));
+                        reservation.setHotelNom(rs.getString("hotel_nom"));
+                        reservation.setNbPersPrises(rs.getInt("nb_pers_prises"));
+
+                        assignation.addReservation(reservation);
+                    }
+                }
+
+                return assignation;
+            }
+
+        } catch (SQLException e) {
+            throw new Exception("Error fetching assignation details for id " + assignationId, e);
+        }
     }
 }

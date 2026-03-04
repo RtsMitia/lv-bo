@@ -43,7 +43,8 @@ public class LieuRepository {
 
     public Lieu getById(Integer id) throws Exception {
         try (Connection connection = AppConfig.createDataSource().getConnection();
-             PreparedStatement stmt = connection.prepareStatement("SELECT id, code, libelle FROM lieux WHERE id = ?")) {
+                PreparedStatement stmt = connection
+                        .prepareStatement("SELECT id, code, libelle FROM lieux WHERE id = ?")) {
             stmt.setInt(1, id);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -56,5 +57,16 @@ public class LieuRepository {
             }
         }
         return null;
+    }
+    
+    public List<String> getLibelle(List<Integer> lieuIds) throws Exception {
+        List<String> libelles = new ArrayList<>();
+        for (Integer id : lieuIds) {
+            Lieu lieu = getById(id);
+            if (lieu != null) {
+                libelles.add(lieu.getLibelle());
+            }
+        }
+        return libelles;
     }
 }
