@@ -168,9 +168,18 @@ public class AssignationRepository {
                 PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             ps.setInt(1, vehiculeId);
-            ps.setTimestamp(2, Timestamp.valueOf(departAeroport));
-            ps.setTimestamp(3, Timestamp.valueOf(retourAeroport));
+            if (departAeroport != null) {
+                ps.setTimestamp(2, Timestamp.valueOf(departAeroport));
+            } else {
+                ps.setNull(2, Types.TIMESTAMP);
+            }
 
+            if (retourAeroport != null) {
+                ps.setTimestamp(3, Timestamp.valueOf(retourAeroport));
+            } else {
+                ps.setNull(3, Types.TIMESTAMP);
+            }
+            
             ps.executeUpdate();
 
             try (ResultSet rs = ps.getGeneratedKeys()) {
