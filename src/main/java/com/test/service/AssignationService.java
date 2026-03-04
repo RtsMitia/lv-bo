@@ -67,7 +67,7 @@ public class AssignationService {
             List<Reservation> reservations = groups.get(dateEntry);
             for (Reservation r : reservations) {
                 Assignation a = assignReservation(r, date);
-                if (assignations.stream().noneMatch(x -> x.getId().equals(a.getId()))) {
+                if (a != null && assignations.stream().noneMatch(x -> x != null && x.getId().equals(a.getId()))) {
                     assignations.add(a);
                 }
             }
