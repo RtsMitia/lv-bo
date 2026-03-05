@@ -11,6 +11,7 @@
     Trajet trajet = (Trajet) request.getAttribute("trajet");
     BigDecimal totalDistance = (BigDecimal) request.getAttribute("totalDistance");
     List<String> lieux = (List<String>) request.getAttribute("lieux");
+    List<BigDecimal> segmentDistances = trajet != null ? trajet.getSegmentDistances() : null;
     AssignationWithDetails assignationDetails = (AssignationWithDetails) request.getAttribute("assignationDetails");
     List<ReservationWithHotel> reservations = assignationDetails != null ? assignationDetails.getReservations() : null;
 
@@ -54,11 +55,19 @@
         <div style="flex:1; min-width:300px; background:#fff; padding:16px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
             <h3>Trajet</h3>
             <p><strong>Distance totale :</strong> <%= totalDistance != null ? totalDistance : "N/A" %> km</p>
-            <p><strong>Itinéraire (lieux) :</strong></p>
-            <ul>
+            <p><strong>Itinéraire :</strong></p>
+            <ul style="list-style:none; padding-left:0;">
                 <% if (lieux != null && !lieux.isEmpty()) {
-                       for (int i = 0; i < lieux.size(); i++) { %>
-                           <li><%= (i + 1) + ". " + lieux.get(i) %></li>
+                       for (int i = 0; i < lieux.size(); i++) {
+                           BigDecimal segDist = (segmentDistances != null && i < segmentDistances.size()) ? segmentDistances.get(i) : null;
+                           String prevPoint = (i == 0) ? "Aéroport" : lieux.get(i - 1);
+                %>
+                           <li style="margin-bottom:6px;">
+                               <% if (segDist != null) { %>
+                                   <span style="display:inline-block; background:#e9ecef; border-radius:4px; padding:2px 8px; font-size:0.85em; color:#495057; margin-right:6px;">← <%= segDist %> km</span>
+                               <% } %>
+                               <strong><%= (i + 1) + ". " + lieux.get(i) %></strong>
+                           </li>
                 <%     }
                    } else { %>
                        <li>N/A</li>
