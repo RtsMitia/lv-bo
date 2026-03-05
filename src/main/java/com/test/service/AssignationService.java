@@ -47,10 +47,10 @@ public class AssignationService {
         unassignedReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
         Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
-        for(Reservation r : unassignedReservations) {
+        for (Reservation r : unassignedReservations) {
             LocalDateTime key = r.getDateHeureArrivee();
             List<Reservation> list = groups.get(key);
-            if(list == null) {
+            if (list == null) {
                 list = new ArrayList<>();
                 groups.put(key, list);
             }
@@ -58,11 +58,12 @@ public class AssignationService {
         }
 
         for (List<Reservation> reservations : groups.values()) {
-            reservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed()); // pr que le nb de passager soit decroissant
+            reservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed()); // pr que le nb de passager
+                                                                                            // soit decroissant
         }
 
         List<Assignation> assignations = new ArrayList<>();
-        for(LocalDateTime dateEntry : groups.keySet()) {
+        for (LocalDateTime dateEntry : groups.keySet()) {
             List<Reservation> reservations = groups.get(dateEntry);
             for (Reservation r : reservations) {
                 Assignation a = assignReservation(r, date);
@@ -78,14 +79,14 @@ public class AssignationService {
 
     private List<Reservation> getUnassignedReservationsForDate(LocalDate date) {
         List<Reservation> allReservations = reservationRepo.findByDate(date);
-        
+
         List<Reservation> unassigned = new ArrayList<>();
         for (Reservation r : allReservations) {
             if (!hasAssignation(r.getId())) {
                 unassigned.add(r);
             }
         }
-        
+
         return unassigned;
     }
 
@@ -181,20 +182,20 @@ public class AssignationService {
             if (placeCompare != 0) {
                 return placeCompare;
             }
-            
+
             String type1 = v1.getTypeCarburant();
             String type2 = v2.getTypeCarburant();
 
             if ("D".equalsIgnoreCase(type1) && !"D".equalsIgnoreCase(type2)) {
-                return -1; 
+                return -1;
             } else if (!"D".equalsIgnoreCase(type1) && "D".equalsIgnoreCase(type2)) {
-                return 1; 
+                return 1;
             }
-            
-            return 0; 
+
+            return 0;
         });
 
-        return vehicles.get(0); 
+        return vehicles.get(0);
     }
 
     public boolean calculateAndUpdateRetourAeroport(List<Assignation> assignations) {
@@ -237,7 +238,6 @@ public class AssignationService {
         return a.getDepartAeroport().plusMinutes((long) (roundTripHours * 60));
     }
 
-    
     public List<Integer> findLieuxIds(Integer assignationId) throws Exception {
         return assignationRepo.findLieuxIds(assignationId);
     }
@@ -251,6 +251,7 @@ public class AssignationService {
             BigDecimal totalDistance = BigDecimal.ZERO;
             List<Integer> lieuxIds = findLieuxIds(assignationId);
             List<Integer> sortedLieux = new ArrayList<>();
+            List<BigDecimal> segmentDistances = new ArrayList<>();
             List<Integer> tempList = new ArrayList<>(lieuxIds);
             Integer currentPoint = distanceRepo.getLieuIdByCode("AIR");
 
@@ -260,12 +261,13 @@ public class AssignationService {
                     break;
                 }
                 sortedLieux.add(nearest.getKey());
+                segmentDistances.add(nearest.getValue());
                 tempList.remove(nearest.getKey());
                 currentPoint = nearest.getKey();
                 totalDistance = totalDistance.add(nearest.getValue());
             }
 
-            return new Trajet(totalDistance, sortedLieux);
+            return new Trajet(totalDistance, sortedLieux, segmentDistances);
 
         } catch (Exception e) {
             System.err.println("Error finding trajet for assignation " + assignationId + ": " + e.getMessage());

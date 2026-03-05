@@ -1,11 +1,19 @@
 package com.test.repository;
 
 import com.test.config.AppConfig;
+import com.test.model.Lieu;
+
 import java.math.BigDecimal;
 import java.sql.*;
 import java.util.*;
 
 public class DistanceRepository {
+    private final LieuRepository lieuRepo;
+
+    public DistanceRepository() {
+        this.lieuRepo = new LieuRepository();
+    }
+    
     public BigDecimal findDistanceFromAirportToLieu(Integer lieuId) throws Exception {
         Integer airportId = getLieuIdByCode("AIR");
         if (airportId == null) {
@@ -42,7 +50,17 @@ public class DistanceRepository {
 
         for (Integer toLieuId : toLieuIds) {
             BigDecimal distance = getDistanceBetween(fromLieuId, toLieuId);
-            if (distance != null && distance.compareTo(shortestDistance) < 0) {
+            if (distance != null && distance.compareTo(shortestDistance) == 0) {
+                Lieu lieu1 = lieuRepo.getById(nearestLieuId);
+                Lieu lieu2 = lieuRepo.getById(toLieuId);
+
+                if (lieu1 != null && lieu2 != null) {
+                    if (lieu1.getLibelle().compareTo(lieu2.getLibelle()) > 0) {
+                        nearestLieuId = toLieuId;
+                    }
+                }
+            }
+            else if (distance != null && distance.compareTo(shortestDistance) < 0) {
                 shortestDistance = distance;
                 nearestLieuId = toLieuId;
             }
