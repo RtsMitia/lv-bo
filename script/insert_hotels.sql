@@ -12,13 +12,21 @@ INSERT INTO dev.hotel (nom, id_lieu) VALUES
 ('Lokanga', (SELECT id FROM dev.lieux WHERE code = 'LOK'));
 
 INSERT INTO dev.distance ("from", "to", distance, unite) VALUES
+-- AIR connections
 ((SELECT id FROM dev.lieux WHERE code = 'AIR'), (SELECT id FROM dev.lieux WHERE code = 'COL'), 15.5, 'km'),
 ((SELECT id FROM dev.lieux WHERE code = 'AIR'), (SELECT id FROM dev.lieux WHERE code = 'NOV'), 12.3, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'NOV'), (SELECT id FROM dev.lieux WHERE code = 'IBI'), 8.2, 'km'),
-((SELECT id FROM dev.lieux WHERE code = 'NOV'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 14.5, 'km'),
+((SELECT id FROM dev.lieux WHERE code = 'AIR'), (SELECT id FROM dev.lieux WHERE code = 'IBI'), 18.0, 'km'),
+((SELECT id FROM dev.lieux WHERE code = 'AIR'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 21.0, 'km'),
+-- COL connections
+((SELECT id FROM dev.lieux WHERE code = 'COL'), (SELECT id FROM dev.lieux WHERE code = 'NOV'), 13.5, 'km'),
 ((SELECT id FROM dev.lieux WHERE code = 'COL'), (SELECT id FROM dev.lieux WHERE code = 'IBI'), 10.0, 'km'),
 ((SELECT id FROM dev.lieux WHERE code = 'COL'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 12.0, 'km'),
+-- NOV connections
+((SELECT id FROM dev.lieux WHERE code = 'NOV'), (SELECT id FROM dev.lieux WHERE code = 'IBI'), 8.2, 'km'),
+((SELECT id FROM dev.lieux WHERE code = 'NOV'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 14.5, 'km'),
+-- IBI-LOK connection
 ((SELECT id FROM dev.lieux WHERE code = 'IBI'), (SELECT id FROM dev.lieux WHERE code = 'LOK'), 9.5, 'km');
+
 
 INSERT INTO dev.param (cle, valeur) VALUES
 ('vm', '60');
