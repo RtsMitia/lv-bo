@@ -108,16 +108,10 @@ public class AssignationService {
     private Vehicule trouverNouveauVehicule(Reservation r, LocalDate date) {
         List<Vehicule> all = vehiculeRepo.findAll();
         List<Vehicule> pasDansMap = new ArrayList<>();
-        Set<Integer> usedVehiculeIds = new HashSet<>();
-
-        for (AssignationWithDetails awd : assignationRepo.findWithDetailsByDate(date)) {
-            if (awd.getVehiculeId() != null) {
-                usedVehiculeIds.add(awd.getVehiculeId());
-            }
-        }
+        Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(r.getDateHeureArrivee());
 
         for (Vehicule v : all) {
-            if (!usedVehiculeIds.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
+            if (!busyVehiculeIds.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
                 pasDansMap.add(v);
             }
         }
@@ -129,34 +123,41 @@ public class AssignationService {
         return selectBestVehicle(pasDansMap, r.getNbPassager());
     }
 
-    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) {
-        List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDate(date);
-        Map<Integer, List<AssignationWithDetails>> assignationMap = new HashMap<>();
-        for (AssignationWithDetails a : vehiculesDispos) {
-            if (!assignationMap.containsKey(a.getAssignationId())) {
-                assignationMap.put(a.getAssignationId(), new ArrayList<>());
+    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) throws Exception {
+        try {
+            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDate(date);
+            Map<Integer, List<AssignationWithDetails>> assignationMap = new HashMap<>();
+            for (AssignationWithDetails a : vehiculesDispos) {
+                if (!assignationMap.containsKey(a.getAssignationId())) {
+                    assignationMap.put(a.getAssignationId(), new ArrayList<>());
+                }
+                assignationMap.get(a.getAssignationId()).add(a);
             }
-            assignationMap.get(a.getAssignationId()).add(a);
-        }
 
-        int plusPetit = Integer.MAX_VALUE;
-        int idAssignationBest = 0;
-        boolean trouve = false;
+            int plusPetit = Integer.MAX_VALUE;
+            int idAssignationBest = 0;
+            boolean trouve = false;
 
-        for (int idEntry : assignationMap.keySet()) {
-            int restePlace = assignationMap.get(idEntry).get(0).getRestePlace();
-            if (restePlace >= r.getNbPassager() && restePlace < plusPetit) {
-                plusPetit = restePlace;
-                idAssignationBest = idEntry;
-                trouve = true;
+            for (int idEntry : assignationMap.keySet()) {
+                AssignationWithDetails awdEntry = assignationMap.get(idEntry).get(0);
+                int restePlace = awdEntry.getRestePlace();
+                LocalDateTime departAeroport = awdEntry.getDepartAeroport();
+                if (restePlace >= r.getNbPassager() && restePlace < plusPetit
+                        && departAeroport != null && departAeroport.equals(r.getDateHeureArrivee())) {
+                    plusPetit = restePlace;
+                    idAssignationBest = idEntry;
+                    trouve = true;
+                }
             }
-        }
 
-        if (trouve) {
-            return assignationRepo.findById(idAssignationBest);
-        }
+            if (trouve) {
+                return assignationRepo.findById(idAssignationBest);
+            }
 
-        return null;
+            return null;
+        } catch(Exception e) {
+            throw new Exception(e.getMessage());
+        }
     }
 
     public Assignation assignReservation(Reservation reservation, LocalDate date) throws Exception {
