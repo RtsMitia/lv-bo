@@ -7,10 +7,13 @@ import com.test.model.Assignation;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class AssignationRepository {
     private final DataSource ds;
@@ -209,6 +212,31 @@ public class AssignationRepository {
         } catch (SQLException e) {
             throw new RuntimeException("Error updating retour_aeroport for assignation id " + assignationId, e);
         }
+    }
+
+    /**
+     * Returns IDs of vehicles that are currently on a trip at the given time:
+     * either the trip has started but retour_aeroport is null (not yet calculated),
+     * or retour_aeroport is set but hasn't passed yet.
+     */
+    public Set<Integer> findBusyVehiculeIds(LocalDateTime atTime) {
+        String sql = "SELECT DISTINCT vehicule FROM assignation " +
+                     "WHERE depart_aeroport <= ? " +
+                     "AND (retour_aeroport IS NULL OR retour_aeroport > ?)";
+        Set<Integer> busyIds = new HashSet<>();
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.valueOf(atTime));
+            ps.setTimestamp(2, Timestamp.valueOf(atTime));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    busyIds.add(rs.getInt("vehicule"));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Error fetching busy vehicule ids at " + atTime, e);
+        }
+        return busyIds;
     }
 
     public List<Integer> findLieuxIds(Integer assignationId) {
