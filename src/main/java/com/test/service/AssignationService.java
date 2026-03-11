@@ -239,7 +239,7 @@ public class AssignationService {
         for (LocalDateTime dateEntry : groups.keySet()) {
             List<Reservation> reservations = groups.get(dateEntry);
             for (Reservation r : reservations) {
-                Assignation a = assignReservation(r, date);
+                Assignation a = assignReservation(r, date, dateEntry);
                 if (a != null && assignations.stream().noneMatch(x -> x != null && x.getId().equals(a.getId()))) {
                     assignations.add(a);
                 }
@@ -278,10 +278,10 @@ public class AssignationService {
         }
     }
 
-    private Vehicule trouverNouveauVehicule(Reservation r, LocalDate date) {
+    private Vehicule trouverNouveauVehicule(Reservation r, LocalDateTime dateMax) {
         List<Vehicule> all = vehiculeRepo.findAll();
         List<Vehicule> pasDansMap = new ArrayList<>();
-        Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(r.getDateHeureArrivee());
+        Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(dateMax);
 
         for (Vehicule v : all) {
             if (!busyVehiculeIds.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
@@ -296,9 +296,9 @@ public class AssignationService {
         return selectBestVehicle(pasDansMap, r.getNbPassager());
     }
 
-    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) throws Exception {
+    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date, LocalDateTime dateDepartMax) throws Exception {
         try {
-            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(date, r.getDateHeureArrivee());
+            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(dateDepartMax);
 
             int plusPetit = Integer.MAX_VALUE;
             int idAssignationBest = 0;
@@ -323,19 +323,19 @@ public class AssignationService {
         }
     }
 
-    public Assignation assignReservation(Reservation reservation, LocalDate date) throws Exception {
-        Assignation existante = assignationExistanteDisponible(reservation, date);
+    public Assignation assignReservation(Reservation reservation, LocalDate date, LocalDateTime dateDepartMax) throws Exception {
+        Assignation existante = assignationExistanteDisponible(reservation, date, dateDepartMax);
         if (existante != null) {
             assignationDetailRepo.createDetail(existante.getId(), reservation.getId(), reservation.getNbPassager());
             return existante;
         }
 
-        Vehicule vehicule = trouverNouveauVehicule(reservation, date);
+        Vehicule vehicule = trouverNouveauVehicule(reservation, dateDepartMax);
         if (vehicule == null) {
             System.err.println("Aucun véhicule disponible pour la réservation " + reservation.getId());
             return null;
         }
-        Integer newId = assignationRepo.createAssignation(vehicule.getId(), reservation.getDateHeureArrivee(), null);
+        Integer newId = assignationRepo.createAssignation(vehicule.getId(), dateDepartMax, null);
         assignationDetailRepo.createDetail(newId, reservation.getId(), reservation.getNbPassager());
 
         return assignationRepo.findById(newId);
