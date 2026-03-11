@@ -35,6 +35,45 @@ public class AssignationService {
         this.assignationDetailRepo = new AssignationDetailRepository();
     }
 
+    public List<Reservation> getReservationsBetweenDates(List<Reservation> reservations, LocalDateTime start, LocalDateTime  end) {
+        List<Reservation> filteredList = reservations.stream()
+                                        .filter(r -> !r.getDateHeureArrivee().isBefore(start) && 
+                                                    !r.getDateHeureArrivee().isAfter(end))
+                                        .collect(Collectors.toList());
+
+        return filteredList;
+    }
+    public Map<LocalDateTime, List<Reservation>> groupReservations(List<Reservation> reservations) throws Exception {
+        String taString = paramRepo.getValueByKey("ta");
+        if (taString == null) throw new RuntimeException("Parameter 'ta' not found");
+        int ta = Integer.parseInt(taString);
+
+        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
+        
+        reservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+
+        int i = 0;
+        while (i < reservations.size()) {
+            Reservation current = reservations.get(i);
+            LocalDateTime windowStart = current.getDateHeureArrivee();
+            LocalDateTime windowEnd = windowStart.plusMinutes(ta);
+
+            List<Reservation> currentGroup = new ArrayList<>();
+            int j = i;
+            while (j < reservations.size() && !reservations.get(j).getDateHeureArrivee().isAfter(windowEnd)) {
+                currentGroup.add(reservations.get(j));
+                j++;
+            }
+            
+            LocalDateTime maxDate = currentGroup.get(currentGroup.size() - 1).getDateHeureArrivee();
+            
+            groups.put(maxDate, currentGroup);
+
+            i = j; 
+        }
+        return groups;
+    }
+
     /**
      * Simulate assignment for a given date without persisting anything to the database.
      * Returns a list of AssignationWithDetails representing the projected assignations.
@@ -47,10 +86,10 @@ public class AssignationService {
         List<Reservation> unassigned = getUnassignedReservationsForDate(date);
         unassigned.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
-        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
-        for (Reservation r : unassigned) {
+        Map<LocalDateTime, List<Reservation>> groups = groupReservations(unassigned);
+        /*for (Reservation r : unassigned) {
             groups.computeIfAbsent(r.getDateHeureArrivee(), k -> new ArrayList<>()).add(r);
-        }
+        }*/
         for (List<Reservation> grp : groups.values()) {
             grp.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
         }
@@ -180,16 +219,16 @@ public class AssignationService {
         List<Reservation> unassignedReservations = getUnassignedReservationsForDate(date);
         unassignedReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
-        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
-        for (Reservation r : unassignedReservations) {
-            LocalDateTime key = r.getDateHeureArrivee();
-            List<Reservation> list = groups.get(key);
-            if (list == null) {
-                list = new ArrayList<>();
-                groups.put(key, list);
-            }
-            list.add(r);
-        }
+        Map<LocalDateTime, List<Reservation>> groups = groupReservations(unassignedReservations);
+        // for (Reservation r : unassignedReservations) {
+        //     LocalDateTime key = r.getDateHeureArrivee();
+        //     List<Reservation> list = groups.get(key);
+        //     if (list == null) {
+        //         list = new ArrayList<>();
+        //         groups.put(key, list);
+        //     }
+        //     list.add(r);
+        // }
 
         for (List<Reservation> reservations : groups.values()) {
             reservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed()); // pr que le nb de passager
@@ -200,7 +239,7 @@ public class AssignationService {
         for (LocalDateTime dateEntry : groups.keySet()) {
             List<Reservation> reservations = groups.get(dateEntry);
             for (Reservation r : reservations) {
-                Assignation a = assignReservation(r, date);
+                Assignation a = assignReservation(r, date, dateEntry);
                 if (a != null && assignations.stream().noneMatch(x -> x != null && x.getId().equals(a.getId()))) {
                     assignations.add(a);
                 }
@@ -239,10 +278,10 @@ public class AssignationService {
         }
     }
 
-    private Vehicule trouverNouveauVehicule(Reservation r, LocalDate date) {
+    private Vehicule trouverNouveauVehicule(Reservation r, LocalDateTime dateMax) {
         List<Vehicule> all = vehiculeRepo.findAll();
         List<Vehicule> pasDansMap = new ArrayList<>();
-        Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(r.getDateHeureArrivee());
+        Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(dateMax);
 
         for (Vehicule v : all) {
             if (!busyVehiculeIds.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
@@ -257,9 +296,9 @@ public class AssignationService {
         return selectBestVehicle(pasDansMap, r.getNbPassager());
     }
 
-    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) throws Exception {
+    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date, LocalDateTime dateDepartMax) throws Exception {
         try {
-            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(date, r.getDateHeureArrivee());
+            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(dateDepartMax);
 
             int plusPetit = Integer.MAX_VALUE;
             int idAssignationBest = 0;
@@ -284,19 +323,19 @@ public class AssignationService {
         }
     }
 
-    public Assignation assignReservation(Reservation reservation, LocalDate date) throws Exception {
-        Assignation existante = assignationExistanteDisponible(reservation, date);
+    public Assignation assignReservation(Reservation reservation, LocalDate date, LocalDateTime dateDepartMax) throws Exception {
+        Assignation existante = assignationExistanteDisponible(reservation, date, dateDepartMax);
         if (existante != null) {
             assignationDetailRepo.createDetail(existante.getId(), reservation.getId(), reservation.getNbPassager());
             return existante;
         }
 
-        Vehicule vehicule = trouverNouveauVehicule(reservation, date);
+        Vehicule vehicule = trouverNouveauVehicule(reservation, dateDepartMax);
         if (vehicule == null) {
             System.err.println("Aucun véhicule disponible pour la réservation " + reservation.getId());
             return null;
         }
-        Integer newId = assignationRepo.createAssignation(vehicule.getId(), reservation.getDateHeureArrivee(), null);
+        Integer newId = assignationRepo.createAssignation(vehicule.getId(), dateDepartMax, null);
         assignationDetailRepo.createDetail(newId, reservation.getId(), reservation.getNbPassager());
 
         return assignationRepo.findById(newId);

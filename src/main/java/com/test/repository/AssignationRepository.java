@@ -160,7 +160,7 @@ public class AssignationRepository {
         return list;
     }
 
-    public List<AssignationWithDetails> findWithDetailsByDateAndDepartAeroport(LocalDate date,
+    public List<AssignationWithDetails> findWithDetailsByDateAndDepartAeroport(
             LocalDateTime departAeroport) {
         List<AssignationWithDetails> list = new ArrayList<>();
         Map<Integer, AssignationWithDetails> assignationMap = new HashMap<>();
@@ -185,15 +185,14 @@ public class AssignationRepository {
                 "LEFT JOIN assignation_detail ad ON ad.id_association = a.id " +
                 "LEFT JOIN reservation r ON r.id = ad.id_reservation " +
                 "LEFT JOIN hotel h ON h.id = r.id_hotel " +
-                "WHERE CAST(a.depart_aeroport AS DATE) = ? " +
-                "AND a.depart_aeroport = ? " +
+                "WHERE " +
+                "a.depart_aeroport = ? " +
                 "ORDER BY a.id, ad.id_reservation";
 
         try (Connection c = ds.getConnection();
                 PreparedStatement ps = c.prepareStatement(sql)) {
 
-            ps.setDate(1, java.sql.Date.valueOf(date));
-            ps.setTimestamp(2, Timestamp.valueOf(departAeroport));
+            ps.setTimestamp(1, Timestamp.valueOf(departAeroport));
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
