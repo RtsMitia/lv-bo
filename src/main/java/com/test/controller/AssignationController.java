@@ -12,6 +12,7 @@ import com.test.service.AssignationService;
 import com.fw.annotations.AnnotationController;
 import com.fw.annotations.ManageUrl;
 import com.fw.annotations.MyGET;
+import com.fw.annotations.MyPOST;
 import com.fw.ModelView;
 
 import java.math.BigDecimal;
@@ -57,12 +58,23 @@ public class AssignationController {
         try {
             LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
 
-            // Automatically assign unassigned reservations before displaying
-            int assignedCount = assignationService.assignReservationsForDate(localDate);
+            // Simulate assignations without saving to database
+            List<AssignationWithDetails> simulatedAssignations = assignationService.simulateAssignationsForDate(localDate);
 
-            List<AssignationWithDetails> assignations = assignationRepository.findWithDetailsByDate(localDate);
-
-            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
+            // Determine unassigned reservations from the simulation result (not the DB)
+            java.util.Set<Integer> coveredIds = new java.util.HashSet<>();
+            for (AssignationWithDetails awd : simulatedAssignations) {
+                for (AssignationWithDetails.ReservationWithHotel rwh : awd.getReservations()) {
+                    coveredIds.add(rwh.getReservationId());
+                }
+            }
+            List<Reservation> allForDate = reservationRepository.findByDate(localDate);
+            List<Reservation> unassignedReservations = new java.util.ArrayList<>();
+            for (Reservation r : allForDate) {
+                if (!coveredIds.contains(r.getId())) {
+                    unassignedReservations.add(r);
+                }
+            }
 
             Map<Integer, String> hotelMap = new HashMap<>();
             List<Hotel> hotels = hotelRepository.findAll();
@@ -73,10 +85,10 @@ public class AssignationController {
             ModelView mv = new ModelView("layout.jsp");
             mv.addItem("date", localDate);
             mv.addItem("dateFormatted", localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-            mv.addItem("assignations", assignations);
+            mv.addItem("assignations", simulatedAssignations);
             mv.addItem("unassignedReservations", unassignedReservations);
             mv.addItem("hotelMap", hotelMap);
-            mv.addItem("assignedCount", assignedCount);
+            mv.addItem("isSimulation", true);
             mv.addItem("content", "assignation/assignation_list.jsp");
             return mv;
 
@@ -84,6 +96,45 @@ public class AssignationController {
             e.printStackTrace();
             ModelView mv = new ModelView("layout.jsp");
             mv.addItem("error", "Erreur lors de la récupération des données: " + e.getMessage());
+            mv.addItem("content", "assignation/assignation_date_form.jsp");
+            return mv;
+        }
+    }
+
+    @ManageUrl("/save")
+    @MyPOST
+    public ModelView saveAssignations(String date) {
+        if (date == null || date.isEmpty()) {
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("content", "assignation/assignation_date_form.jsp");
+            mv.addItem("error", "Date manquante");
+            return mv;
+        }
+        try {
+            LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
+            int assignedCount = assignationService.assignReservationsForDate(localDate);
+
+            List<AssignationWithDetails> assignations = assignationRepository.findWithDetailsByDate(localDate);
+            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
+
+            Map<Integer, String> hotelMap = new HashMap<>();
+            List<Hotel> hotels = hotelRepository.findAll();
+            for (Hotel h : hotels) hotelMap.put(h.getId(), h.getNom());
+
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("date", localDate);
+            mv.addItem("dateFormatted", localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            mv.addItem("assignations", assignations);
+            mv.addItem("unassignedReservations", unassignedReservations);
+            mv.addItem("hotelMap", hotelMap);
+            mv.addItem("assignedCount", assignedCount);
+            mv.addItem("isSimulation", false);
+            mv.addItem("content", "assignation/assignation_list.jsp");
+            return mv;
+        } catch (Exception e) {
+            e.printStackTrace();
+            ModelView mv = new ModelView("layout.jsp");
+            mv.addItem("error", "Erreur lors de l'enregistrement: " + e.getMessage());
             mv.addItem("content", "assignation/assignation_date_form.jsp");
             return mv;
         }
