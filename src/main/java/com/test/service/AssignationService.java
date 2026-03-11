@@ -35,6 +35,45 @@ public class AssignationService {
         this.assignationDetailRepo = new AssignationDetailRepository();
     }
 
+    public List<Reservation> getReservationsBetweenDates(List<Reservation> reservations, LocalDateTime start, LocalDateTime  end) {
+        List<Reservation> filteredList = reservations.stream()
+                                        .filter(r -> !r.getDateHeureArrivee().isBefore(start) && 
+                                                    !r.getDateHeureArrivee().isAfter(end))
+                                        .collect(Collectors.toList());
+
+        return filteredList;
+    }
+    public Map<LocalDateTime, List<Reservation>> groupReservations(List<Reservation> reservations) throws Exception {
+        String taString = paramRepo.getValueByKey("ta");
+        if (taString == null) throw new RuntimeException("Parameter 'ta' not found");
+        int ta = Integer.parseInt(taString);
+
+        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
+        
+        reservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+
+        int i = 0;
+        while (i < reservations.size()) {
+            Reservation current = reservations.get(i);
+            LocalDateTime windowStart = current.getDateHeureArrivee();
+            LocalDateTime windowEnd = windowStart.plusMinutes(ta);
+
+            List<Reservation> currentGroup = new ArrayList<>();
+            int j = i;
+            while (j < reservations.size() && !reservations.get(j).getDateHeureArrivee().isAfter(windowEnd)) {
+                currentGroup.add(reservations.get(j));
+                j++;
+            }
+            
+            LocalDateTime maxDate = currentGroup.get(currentGroup.size() - 1).getDateHeureArrivee();
+            
+            groups.put(maxDate, currentGroup);
+
+            i = j; 
+        }
+        return groups;
+    }
+
     /**
      * Simulate assignment for a given date without persisting anything to the database.
      * Returns a list of AssignationWithDetails representing the projected assignations.
@@ -47,10 +86,10 @@ public class AssignationService {
         List<Reservation> unassigned = getUnassignedReservationsForDate(date);
         unassigned.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
-        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
-        for (Reservation r : unassigned) {
+        Map<LocalDateTime, List<Reservation>> groups = groupReservations(unassigned);
+        /*for (Reservation r : unassigned) {
             groups.computeIfAbsent(r.getDateHeureArrivee(), k -> new ArrayList<>()).add(r);
-        }
+        }*/
         for (List<Reservation> grp : groups.values()) {
             grp.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
         }
