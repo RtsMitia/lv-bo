@@ -125,27 +125,17 @@ public class AssignationService {
 
     private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) throws Exception {
         try {
-            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDate(date);
-            Map<Integer, List<AssignationWithDetails>> assignationMap = new HashMap<>();
-            for (AssignationWithDetails a : vehiculesDispos) {
-                if (!assignationMap.containsKey(a.getAssignationId())) {
-                    assignationMap.put(a.getAssignationId(), new ArrayList<>());
-                }
-                assignationMap.get(a.getAssignationId()).add(a);
-            }
+            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(date, r.getDateHeureArrivee());
 
             int plusPetit = Integer.MAX_VALUE;
             int idAssignationBest = 0;
             boolean trouve = false;
 
-            for (int idEntry : assignationMap.keySet()) {
-                AssignationWithDetails awdEntry = assignationMap.get(idEntry).get(0);
-                int restePlace = awdEntry.getRestePlace();
-                LocalDateTime departAeroport = awdEntry.getDepartAeroport();
-                if (restePlace >= r.getNbPassager() && restePlace < plusPetit
-                        && departAeroport != null && departAeroport.equals(r.getDateHeureArrivee())) {
+            for (AssignationWithDetails awd : vehiculesDispos) {
+                int restePlace = awd.getRestePlace();
+                if (restePlace >= r.getNbPassager() && restePlace < plusPetit) {
                     plusPetit = restePlace;
-                    idAssignationBest = idEntry;
+                    idAssignationBest = awd.getAssignationId();
                     trouve = true;
                 }
             }
