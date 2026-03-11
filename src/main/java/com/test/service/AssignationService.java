@@ -219,16 +219,16 @@ public class AssignationService {
         List<Reservation> unassignedReservations = getUnassignedReservationsForDate(date);
         unassignedReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
-        Map<LocalDateTime, List<Reservation>> groups = new TreeMap<>();
-        for (Reservation r : unassignedReservations) {
-            LocalDateTime key = r.getDateHeureArrivee();
-            List<Reservation> list = groups.get(key);
-            if (list == null) {
-                list = new ArrayList<>();
-                groups.put(key, list);
-            }
-            list.add(r);
-        }
+        Map<LocalDateTime, List<Reservation>> groups = groupReservations(unassignedReservations);
+        // for (Reservation r : unassignedReservations) {
+        //     LocalDateTime key = r.getDateHeureArrivee();
+        //     List<Reservation> list = groups.get(key);
+        //     if (list == null) {
+        //         list = new ArrayList<>();
+        //         groups.put(key, list);
+        //     }
+        //     list.add(r);
+        // }
 
         for (List<Reservation> reservations : groups.values()) {
             reservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed()); // pr que le nb de passager
