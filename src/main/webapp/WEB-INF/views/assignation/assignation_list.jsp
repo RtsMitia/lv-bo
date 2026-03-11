@@ -12,7 +12,9 @@
     List<Reservation> unassignedReservations = (List<Reservation>) request.getAttribute("unassignedReservations");
     Map<Integer, String> hotelMap = (Map<Integer, String>) request.getAttribute("hotelMap");
     Integer assignedCount = (Integer) request.getAttribute("assignedCount");
-    
+    Boolean isSimulation = (Boolean) request.getAttribute("isSimulation");
+    if (isSimulation == null) isSimulation = false;
+
     DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
@@ -30,11 +32,28 @@
            style="padding: 8px 16px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px; display: inline-block;">
             ← Retour
         </a>
-        
-        <% if (assignedCount != null && assignedCount > 0) { %>
-            <div style="margin-top: 15px; padding: 10px; background-color: #d4edda; color: #155724; border-radius: 5px;">
-                ✓ <%= assignedCount %> réservation(s) assignée(s) automatiquement.
+
+        <% if (isSimulation) { %>
+            <div style="margin-top: 15px; padding: 12px 16px; background-color: #fff3cd; color: #856404; border: 1px solid #ffc107; border-radius: 5px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <span>⚠ Ceci est une <strong>simulation</strong> — aucune donnée n'a encore été enregistrée.</span>
+                <form action="${pageContext.request.contextPath}/assignation/save" method="post" style="margin:0;">
+                    <input type="hidden" name="date" value="<%= dateParam != null ? dateParam : "" %>" />
+                    <button type="submit"
+                        style="padding: 8px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                        Enregistrer les assignations
+                    </button>
+                </form>
             </div>
+        <% } else { %>
+            <% if (assignedCount != null && assignedCount > 0) { %>
+                <div style="margin-top: 15px; padding: 10px; background-color: #d4edda; color: #155724; border-radius: 5px;">
+                    ✓ <%= assignedCount %> réservation(s) assignée(s) et enregistrées avec succès.
+                </div>
+            <% } else { %>
+                <div style="margin-top: 15px; padding: 10px; background-color: #d4edda; color: #155724; border-radius: 5px;">
+                    ✓ Assignations enregistrées.
+                </div>
+            <% } %>
         <% } %>
     </div>
     
@@ -59,12 +78,19 @@
                         <% for (AssignationWithDetails assignation : assignations) { %>
                             <tr>
                                 <td>
-                                    <a href="${pageContext.request.contextPath}/assignation/detail/<%= assignation.getAssignationId() %><%= dateParam != null ? ("?date=" + dateParam) : "" %>" style="color:inherit; text-decoration:none;">
+                                    <% if (!isSimulation && assignation.getAssignationId() != null) { %>
+                                        <a href="${pageContext.request.contextPath}/assignation/detail/<%= assignation.getAssignationId() %><%= dateParam != null ? ("?date=" + dateParam) : "" %>" style="color:inherit; text-decoration:none;">
+                                            <strong><%= assignation.getVehiculeReference() %></strong>
+                                        </a>
+                                    <% } else { %>
                                         <strong><%= assignation.getVehiculeReference() %></strong>
-                                    </a><br/>
-                                    <small>(Capacité: <%= assignation.getVehiculePlace() %> places)</small>
+                                    <% } %>
                                     <br/>
-                                    <a href="${pageContext.request.contextPath}/assignation/detail/<%= assignation.getAssignationId() %><%= dateParam != null ? ("?date=" + dateParam) : "" %>" style="margin-top:6px; display:inline-block; padding:6px 10px; background:#007bff; color:#fff; text-decoration:none; border-radius:4px; font-size:12px;">Détails</a>
+                                    <small>(Capacité: <%= assignation.getVehiculePlace() %> places)</small>
+                                    <% if (!isSimulation && assignation.getAssignationId() != null) { %>
+                                        <br/>
+                                        <a href="${pageContext.request.contextPath}/assignation/detail/<%= assignation.getAssignationId() %><%= dateParam != null ? ("?date=" + dateParam) : "" %>" style="margin-top:6px; display:inline-block; padding:6px 10px; background:#007bff; color:#fff; text-decoration:none; border-radius:4px; font-size:12px;">Détails</a>
+                                    <% } %>
                                 </td>
                                 <td>
                                     <% 

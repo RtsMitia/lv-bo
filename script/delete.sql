@@ -1,6 +1,3 @@
--- WARNING: This will permanently remove ALL DATA from all user schemas in the database.
--- Make a backup before running (pg_dump)!
--- Usage (psql): psql -U <db_user> -d <database> -f script/delete.sql
 DO $$
 BEGIN
   -- Safety check: ensure we're connected to the intended database
