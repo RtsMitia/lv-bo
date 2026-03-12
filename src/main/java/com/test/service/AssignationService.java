@@ -135,15 +135,18 @@ public class AssignationService {
                 if (!lieuxIds.isEmpty()) {
                     BigDecimal totalDist = BigDecimal.ZERO;
                     List<Integer> temp = new ArrayList<>(lieuxIds);
-                    Integer current = distanceRepo.getLieuIdByCode("AIR");
+                    Integer aeroportId = distanceRepo.getLieuIdByCode("AIR");
+                    Integer current = aeroportId;
                     while (!temp.isEmpty()) {
                         Map.Entry<Integer, BigDecimal> nearest = distanceRepo.findNearest(current, temp);
-                        if (nearest == null) break;
+                        if (nearest == null)
+                            break;
                         totalDist = totalDist.add(nearest.getValue());
                         temp.remove(nearest.getKey());
                         current = nearest.getKey();
                     }
-                    double roundTripHours = (totalDist.doubleValue() * 2) / vm;
+                    totalDist = totalDist.add(distanceRepo.getDistanceBetween(current, aeroportId));
+                    double roundTripHours = (totalDist.doubleValue()) / vm;
                     va.setRetourAeroport(va.getDepartAeroport().plusMinutes((long)(roundTripHours * 60)));
                 }
             } catch (Exception e) {
