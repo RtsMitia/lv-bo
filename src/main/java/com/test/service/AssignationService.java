@@ -36,12 +36,15 @@ public class AssignationService {
     }
 
     /**
-     * Simulate assignment for a given date without persisting anything to the database.
-     * Returns a list of AssignationWithDetails representing the projected assignations.
+     * Simulate assignment for a given date without persisting anything to the
+     * database.
+     * Returns a list of AssignationWithDetails representing the projected
+     * assignations.
      */
     public List<AssignationWithDetails> simulateAssignationsForDate(LocalDate date) throws Exception {
         String vmString = paramRepo.getValueByKey("vm");
-        if (vmString == null) throw new RuntimeException("Parameter 'vm' not found in database");
+        if (vmString == null)
+            throw new RuntimeException("Parameter 'vm' not found in database");
         double vm = Double.parseDouble(vmString);
 
         List<Reservation> unassigned = getUnassignedReservationsForDate(date);
@@ -58,7 +61,8 @@ public class AssignationService {
         // Prepare hotel lookup (id -> Hotel) for display and trajet calculation
         List<Hotel> hotels = hotelRepo.findAll();
         Map<Integer, Hotel> hotelById = new HashMap<>();
-        for (Hotel h : hotels) hotelById.put(h.getId(), h);
+        for (Hotel h : hotels)
+            hotelById.put(h.getId(), h);
 
         List<Vehicule> allVehicules = vehiculeRepo.findAll();
 
@@ -99,7 +103,8 @@ public class AssignationService {
                             candidates.add(v);
                         }
                     }
-                    if (candidates.isEmpty()) continue;
+                    if (candidates.isEmpty())
+                        continue;
 
                     Vehicule chosen = selectBestVehicle(candidates, r.getNbPassager());
 
@@ -135,19 +140,30 @@ public class AssignationService {
                 if (!lieuxIds.isEmpty()) {
                     BigDecimal totalDist = BigDecimal.ZERO;
                     List<Integer> temp = new ArrayList<>(lieuxIds);
+                    List<Integer> sortedLieuxIds = new ArrayList<>();
+                    List<BigDecimal> segmentDistances = new ArrayList<>();
                     Integer aeroportId = distanceRepo.getLieuIdByCode("AIR");
                     Integer current = aeroportId;
                     while (!temp.isEmpty()) {
                         Map.Entry<Integer, BigDecimal> nearest = distanceRepo.findNearest(current, temp);
                         if (nearest == null)
                             break;
+                        sortedLieuxIds.add(nearest.getKey());
+                        segmentDistances.add(nearest.getValue());
                         totalDist = totalDist.add(nearest.getValue());
                         temp.remove(nearest.getKey());
                         current = nearest.getKey();
                     }
-                    totalDist = totalDist.add(distanceRepo.getDistanceBetween(current, aeroportId));
+                    BigDecimal retourDist = distanceRepo.getDistanceBetween(current, aeroportId);
+                    segmentDistances.add(retourDist);
+                    totalDist = totalDist.add(retourDist);
                     double roundTripHours = (totalDist.doubleValue()) / vm;
-                    va.setRetourAeroport(va.getDepartAeroport().plusMinutes((long)(roundTripHours * 60)));
+                    va.setRetourAeroport(va.getDepartAeroport().plusMinutes((long) (roundTripHours * 60)));
+
+                    List<String> lieuxNoms = lieuRepo.getLibelle(sortedLieuxIds);
+                    va.setTrajetLieuxNoms(lieuxNoms);
+                    va.setTrajetSegmentDistances(segmentDistances);
+                    va.setTrajetTotalDistance(totalDist);
                 }
             } catch (Exception e) {
                 // retour stays null for this virtual assignation
@@ -157,7 +173,8 @@ public class AssignationService {
         return virtualAssignations;
     }
 
-    private AssignationWithDetails.ReservationWithHotel buildReservationWithHotel(Reservation r, Map<Integer, Hotel> hotelById) {
+    private AssignationWithDetails.ReservationWithHotel buildReservationWithHotel(Reservation r,
+            Map<Integer, Hotel> hotelById) {
         AssignationWithDetails.ReservationWithHotel rwh = new AssignationWithDetails.ReservationWithHotel();
         rwh.setReservationId(r.getId());
         rwh.setIdClient(r.getIdClient());
@@ -167,7 +184,8 @@ public class AssignationService {
         rwh.setIdHotel(r.getIdHotel());
         if (r.getIdHotel() != null) {
             Hotel h = hotelById.get(r.getIdHotel());
-            if (h != null) rwh.setHotelNom(h.getNom());
+            if (h != null)
+                rwh.setHotelNom(h.getNom());
         }
         return rwh;
     }
@@ -262,7 +280,8 @@ public class AssignationService {
 
     private Assignation assignationExistanteDisponible(Reservation r, LocalDate date) throws Exception {
         try {
-            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(date, r.getDateHeureArrivee());
+            List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(date,
+                    r.getDateHeureArrivee());
 
             int plusPetit = Integer.MAX_VALUE;
             int idAssignationBest = 0;
@@ -282,7 +301,7 @@ public class AssignationService {
             }
 
             return null;
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new Exception(e.getMessage());
         }
     }
@@ -398,6 +417,7 @@ public class AssignationService {
             }
 
             BigDecimal retour = distanceRepo.getDistanceBetween(currentPoint, aeroport);
+            segmentDistances.add(retour);
             totalDistance = totalDistance.add(retour);
             return new Trajet(totalDistance, sortedLieux, segmentDistances);
 
