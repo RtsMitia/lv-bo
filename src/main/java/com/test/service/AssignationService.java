@@ -360,7 +360,7 @@ public class AssignationService {
             throw new RuntimeException("Parameter 'vm' not found in database");
         }
         double vm = Double.parseDouble(vmString);
-        double roundTripHours = (trajet.getDistance().doubleValue() * 2) / vm;
+        double roundTripHours = (trajet.getDistance().doubleValue()) / vm;
         return a.getDepartAeroport().plusMinutes((long) (roundTripHours * 60));
     }
 
@@ -379,7 +379,8 @@ public class AssignationService {
             List<Integer> sortedLieux = new ArrayList<>();
             List<BigDecimal> segmentDistances = new ArrayList<>();
             List<Integer> tempList = new ArrayList<>(lieuxIds);
-            Integer currentPoint = distanceRepo.getLieuIdByCode("AIR");
+            Integer aeroport = distanceRepo.getLieuIdByCode("AIR");
+            Integer currentPoint = aeroport;
 
             while (!tempList.isEmpty()) {
                 Map.Entry<Integer, BigDecimal> nearest = findNearestLieu(currentPoint, tempList);
@@ -393,6 +394,8 @@ public class AssignationService {
                 totalDistance = totalDistance.add(nearest.getValue());
             }
 
+            BigDecimal retour = distanceRepo.getDistanceBetween(currentPoint, aeroport);
+            totalDistance = totalDistance.add(retour);
             return new Trajet(totalDistance, sortedLieux, segmentDistances);
 
         } catch (Exception e) {
