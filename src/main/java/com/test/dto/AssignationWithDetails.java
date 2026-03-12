@@ -1,5 +1,6 @@
 package com.test.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,9 +15,14 @@ public class AssignationWithDetails {
     private Integer totalPassagers;
     private Integer restePlace;
     private List<ReservationWithHotel> reservations;
+    private List<String> trajetLieuxNoms;
+    private List<BigDecimal> trajetSegmentDistances;
+    private BigDecimal trajetTotalDistance;
 
     public AssignationWithDetails() {
         this.reservations = new ArrayList<>();
+        this.trajetLieuxNoms = new ArrayList<>();
+        this.trajetSegmentDistances = new ArrayList<>();
     }
 
     public Integer getAssignationId() {
@@ -93,6 +99,30 @@ public class AssignationWithDetails {
 
     public void addReservation(ReservationWithHotel reservation) {
         this.reservations.add(reservation);
+    }
+
+    public List<String> getTrajetLieuxNoms() {
+        return trajetLieuxNoms;
+    }
+
+    public void setTrajetLieuxNoms(List<String> trajetLieuxNoms) {
+        this.trajetLieuxNoms = trajetLieuxNoms;
+    }
+
+    public List<BigDecimal> getTrajetSegmentDistances() {
+        return trajetSegmentDistances;
+    }
+
+    public void setTrajetSegmentDistances(List<BigDecimal> trajetSegmentDistances) {
+        this.trajetSegmentDistances = trajetSegmentDistances;
+    }
+
+    public BigDecimal getTrajetTotalDistance() {
+        return trajetTotalDistance;
+    }
+
+    public void setTrajetTotalDistance(BigDecimal trajetTotalDistance) {
+        this.trajetTotalDistance = trajetTotalDistance;
     }
 
     // Inner class pour les réservations avec hotel
