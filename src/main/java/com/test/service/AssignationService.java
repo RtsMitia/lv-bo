@@ -75,8 +75,10 @@ public class AssignationService {
     }
 
     /**
-     * Simulate assignment for a given date without persisting anything to the database.
-     * Returns a list of AssignationWithDetails representing the projected assignations.
+     * Simulate assignment for a given date without persisting anything to the
+     * database.
+     * Returns a list of AssignationWithDetails representing the projected
+     * assignations.
      */
     public List<AssignationWithDetails> simulateAssignationsForDate(LocalDate date) throws Exception {
         String vmString = paramRepo.getValueByKey("vm");
@@ -194,18 +196,23 @@ public class AssignationService {
         if (!lieuxIds.isEmpty()) {
             BigDecimal totalDist = BigDecimal.ZERO;
             List<Integer> temp = new ArrayList<>(lieuxIds);
+            List<Integer> sortedLieuxIds = new ArrayList<>();
+            List<BigDecimal> segmentDistances = new ArrayList<>();
             Integer aeroportId = distanceRepo.getLieuIdByCode("AIR");
             Integer current = aeroportId;
             while (!temp.isEmpty()) {
                 Map.Entry<Integer, BigDecimal> nearest = distanceRepo.findNearest(current, temp);
                 if (nearest == null)
                     break;
+                sortedLieuxIds.add(nearest.getKey());
+                segmentDistances.add(nearest.getValue());
                 totalDist = totalDist.add(nearest.getValue());
                 temp.remove(nearest.getKey());
                 current = nearest.getKey();
             }
-
-            totalDist = totalDist.add(distanceRepo.getDistanceBetween(aeroportId, current));
+            BigDecimal retourDist = distanceRepo.getDistanceBetween(current, aeroportId);
+            segmentDistances.add(retourDist);
+            totalDist = totalDist.add(retourDist);
             String vmString = paramRepo.getValueByKey("vm");
             if (vmString == null) {
                 throw new RuntimeException("Parameter 'vm' not found in database");
@@ -213,10 +220,16 @@ public class AssignationService {
             double vm = Double.parseDouble(vmString);
             double roundTripHours = (totalDist.doubleValue()) / vm;
             va.setRetourAeroport(va.getDepartAeroport().plusMinutes((long) (roundTripHours * 60)));
+
+            List<String> lieuxNoms = lieuRepo.getLibelle(sortedLieuxIds);
+            va.setTrajetLieuxNoms(lieuxNoms);
+            va.setTrajetSegmentDistances(segmentDistances);
+            va.setTrajetTotalDistance(totalDist);
         }
     }
 
-    private AssignationWithDetails.ReservationWithHotel buildReservationWithHotel(Reservation r, Map<Integer, Hotel> hotelById) {
+    private AssignationWithDetails.ReservationWithHotel buildReservationWithHotel(Reservation r,
+            Map<Integer, Hotel> hotelById) {
         AssignationWithDetails.ReservationWithHotel rwh = new AssignationWithDetails.ReservationWithHotel();
         rwh.setReservationId(r.getId());
         rwh.setIdClient(r.getIdClient());
@@ -226,7 +239,8 @@ public class AssignationService {
         rwh.setIdHotel(r.getIdHotel());
         if (r.getIdHotel() != null) {
             Hotel h = hotelById.get(r.getIdHotel());
-            if (h != null) rwh.setHotelNom(h.getNom());
+            if (h != null)
+                rwh.setHotelNom(h.getNom());
         }
         return rwh;
     }
@@ -343,7 +357,7 @@ public class AssignationService {
             }
 
             return null;
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new Exception(e.getMessage());
         }
     }
@@ -459,6 +473,7 @@ public class AssignationService {
             }
 
             BigDecimal retour = distanceRepo.getDistanceBetween(currentPoint, aeroport);
+            segmentDistances.add(retour);
             totalDistance = totalDistance.add(retour);
             return new Trajet(totalDistance, sortedLieux, segmentDistances);
 

@@ -10,6 +10,7 @@ import com.test.repository.HotelRepository;
 import com.test.repository.LieuRepository;
 import com.test.repository.ReservationRepository;
 import com.test.service.AssignationService;
+import com.test.service.TrajetService;
 import com.fw.annotations.AnnotationController;
 import com.fw.annotations.ManageUrl;
 import com.fw.annotations.MyGET;
@@ -31,6 +32,7 @@ public class AssignationController {
     private final HotelRepository hotelRepository = new HotelRepository();
     private final AssignationService assignationService = new AssignationService();
     private final LieuRepository lieuRepository = new LieuRepository();
+    private final TrajetService trajetService = new TrajetService();
 
     @ManageUrl("")
     @MyGET
@@ -120,11 +122,13 @@ public class AssignationController {
             int assignedCount = assignationService.assignReservationsForDate(localDate);
 
             List<AssignationWithDetails> assignations = assignationRepository.findWithDetailsByDate(localDate);
+            enrichAssignationsWithTrajet(assignations);
             List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
 
             Map<Integer, String> hotelMap = new HashMap<>();
             List<Hotel> hotels = hotelRepository.findAll();
-            for (Hotel h : hotels) hotelMap.put(h.getId(), h.getNom());
+            for (Hotel h : hotels)
+                hotelMap.put(h.getId(), h.getNom());
 
             ModelView mv = new ModelView("layout.jsp");
             mv.addItem("date", localDate);
@@ -188,6 +192,22 @@ public class AssignationController {
         } catch (Exception e) {
             e.printStackTrace();
             return showAssignationList(date);
+        }
+    }
+
+    private void enrichAssignationsWithTrajet(List<AssignationWithDetails> assignations) {
+        for (AssignationWithDetails a : assignations) {
+            if (a.getAssignationId() == null)
+                continue;
+            try {
+                Trajet trajet = assignationService.findTrajet(a.getAssignationId());
+                List<String> lieuxNoms = lieuRepository.getLibelle(trajet.getLieuxIds());
+                a.setTrajetLieuxNoms(lieuxNoms);
+                a.setTrajetSegmentDistances(trajet.getSegmentDistances());
+                a.setTrajetTotalDistance(trajet.getDistance());
+            } catch (Exception e) {
+                // trajet info stays empty
+            }
         }
     }
 }
