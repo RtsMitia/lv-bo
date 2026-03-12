@@ -1,6 +1,7 @@
 package com.test.controller;
 
 import com.test.dto.AssignationWithDetails;
+import com.test.model.Assignation;
 import com.test.model.Hotel;
 import com.test.model.Reservation;
 import com.test.model.Trajet;
@@ -58,19 +59,23 @@ public class AssignationController {
         try {
             LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
 
-            // Simulate assignations without saving to database
             List<AssignationWithDetails> simulatedAssignations = assignationService.simulateAssignationsForDate(localDate);
+            List<AssignationWithDetails> assignationsWithDetailsBase = assignationRepository.findWithDetailsByDate(localDate);
+            
+            List<AssignationWithDetails> assignationsWithDetails = new java.util.ArrayList<>(assignationsWithDetailsBase);
+            assignationsWithDetails.addAll(simulatedAssignations);
+        
 
-            // Determine unassigned reservations from the simulation result (not the DB)
             java.util.Set<Integer> coveredIds = new java.util.HashSet<>();
             for (AssignationWithDetails awd : simulatedAssignations) {
                 for (AssignationWithDetails.ReservationWithHotel rwh : awd.getReservations()) {
                     coveredIds.add(rwh.getReservationId());
                 }
             }
-            List<Reservation> allForDate = reservationRepository.findByDate(localDate);
+            List<Reservation> unassignedReservationsBase = reservationRepository.findUnassignedByDate(localDate);
+            
             List<Reservation> unassignedReservations = new java.util.ArrayList<>();
-            for (Reservation r : allForDate) {
+            for (Reservation r : unassignedReservationsBase) {
                 if (!coveredIds.contains(r.getId())) {
                     unassignedReservations.add(r);
                 }
@@ -85,7 +90,7 @@ public class AssignationController {
             ModelView mv = new ModelView("layout.jsp");
             mv.addItem("date", localDate);
             mv.addItem("dateFormatted", localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-            mv.addItem("assignations", simulatedAssignations);
+            mv.addItem("assignations", assignationsWithDetails);
             mv.addItem("unassignedReservations", unassignedReservations);
             mv.addItem("hotelMap", hotelMap);
             mv.addItem("isSimulation", true);
