@@ -462,6 +462,39 @@ public class AssignationRepository {
         return list;
     }
 
+    /**
+     * Delete all assignations of a given date and all their details in a single SQL statement.
+     */
+    public int deleteByDepartDate(LocalDate date) {
+        String sql =
+                "WITH deleted_details AS (" +
+                "    DELETE FROM assignation_detail ad " +
+                "    USING assignation a " +
+                "    WHERE ad.id_association = a.id " +
+                "      AND CAST(a.depart_aeroport AS DATE) = ?" +
+                "), deleted_assignations AS (" +
+                "    DELETE FROM assignation a " +
+                "    WHERE CAST(a.depart_aeroport AS DATE) = ? " +
+                "    RETURNING a.id" +
+                ") " +
+                "SELECT COUNT(*) AS deleted_count FROM deleted_assignations";
+
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setDate(1, java.sql.Date.valueOf(date));
+            ps.setDate(2, java.sql.Date.valueOf(date));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("deleted_count");
+                }
+            }
+            return 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error deleting assignations for date " + date, e);
+        }
+    }
+
     public void deleteById(Integer id) {
         String sql = "DELETE FROM assignation WHERE id = ?";
         try (Connection c = ds.getConnection();
