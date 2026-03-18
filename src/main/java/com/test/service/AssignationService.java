@@ -15,6 +15,8 @@ import java.util.stream.Collectors;
  */
 public class AssignationService {
 
+    private static final boolean DEBUG_ASSIGNATION = true;
+
     private final ReservationRepository reservationRepo;
     private final VehiculeRepository vehiculeRepo;
     private final HotelRepository hotelRepo;
@@ -74,233 +76,270 @@ public class AssignationService {
         return groups;
     }
 
-    /**
-     * Simulate assignment for a given date without persisting anything to the
-     * database.
-     * Returns a list of AssignationWithDetails representing the projected
-     * assignations.
-     */
-    public List<AssignationWithDetails> simulateAssignationsForDate(LocalDate date) throws Exception {
-        String vmString = paramRepo.getValueByKey("vm");
-        if (vmString == null)
-            throw new RuntimeException("Parameter 'vm' not found in database");
-        double vm = Double.parseDouble(vmString);
-
-        List<Reservation> unassigned = getUnassignedReservationsForDate(date);
-        unassigned.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
-
-        Map<LocalDateTime, List<Reservation>> groups = groupReservations(unassigned);
-        /*for (Reservation r : unassigned) {
-            groups.computeIfAbsent(r.getDateHeureArrivee(), k -> new ArrayList<>()).add(r);
-        }*/
-        for (List<Reservation> grp : groups.values()) {
-            grp.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
-        }
-
-        // Prepare hotel lookup (id -> Hotel) for display and trajet calculation
-        List<Hotel> hotels = hotelRepo.findAll();
-        Map<Integer, Hotel> hotelById = new HashMap<>();
-        for (Hotel h : hotels)
-            hotelById.put(h.getId(), h);
-
-        List<Vehicule> allVehicules = vehiculeRepo.findAll();
-
-        // In-memory virtual assignations being built
-        List<AssignationWithDetails> virtualAssignations = new ArrayList<>();
-
-        for (LocalDateTime timeSlot : groups.keySet()) {
-            List<AssignationWithDetails> virtualAssignationsForSlot = new ArrayList<>();
-            for (Reservation r : groups.get(timeSlot)) {
-                // Find best existing virtual assignation with enough free space
-                AssignationWithDetails bestVirtual = null;
-                int minReste = Integer.MAX_VALUE;
-                for (AssignationWithDetails va : virtualAssignations) {
-                    if (va.getDepartAeroport().equals(timeSlot) && va.getRestePlace() >= r.getNbPassager()) {
-                        if (va.getRestePlace() < minReste) {
-                            minReste = va.getRestePlace();
-                            bestVirtual = va;
-                        }
-                    }
-                }
-
-                if (bestVirtual != null) {
-                    AssignationWithDetails.ReservationWithHotel rwh = buildReservationWithHotel(r, hotelById);
-                    bestVirtual.addReservation(rwh);
-                    bestVirtual.setTotalPassagers(bestVirtual.getTotalPassagers() + r.getNbPassager());
-                    bestVirtual.setRestePlace(bestVirtual.getRestePlace() - r.getNbPassager());
-                } else {
-                    // Combine real DB busy vehicles with virtual busy vehicles for this slot
-                    Set<Integer> realBusy = assignationRepo.findBusyVehiculeIds(timeSlot);
-                    Set<Integer> virtualBusy = findVirtualBusyVehiculeIds(timeSlot, virtualAssignations);
-                    Set<Integer> allBusy = new HashSet<>(realBusy);
-                    allBusy.addAll(virtualBusy);
-
-                    List<Vehicule> candidates = new ArrayList<>();
-                    for (Vehicule v : allVehicules) {
-                        if (!allBusy.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
-                            candidates.add(v);
-                        }
-                    }
-                    if (candidates.isEmpty())
-                        continue;
-
-                    Vehicule chosen = selectBestVehicle(candidates, r.getNbPassager());
-
-                    AssignationWithDetails va = new AssignationWithDetails();
-                    va.setVehiculeId(chosen.getId());
-                    va.setVehiculeReference(chosen.getReference());
-                    va.setVehiculePlace(chosen.getPlace());
-                    va.setDepartAeroport(timeSlot);
-                    va.setTotalPassagers(r.getNbPassager());
-                    va.setRestePlace(chosen.getPlace() - r.getNbPassager());
-
-                    AssignationWithDetails.ReservationWithHotel rwh = buildReservationWithHotel(r, hotelById);
-                    va.addReservation(rwh);
-
-                    virtualAssignations.add(va);
-                    virtualAssignationsForSlot.add(va);
-                }
-            }
-            calculateAndUpdateDateRetourForVirtualAssignations(virtualAssignationsForSlot, hotelById);
-        }
-
-        return virtualAssignations;
-    }
-    
-    private Set<Integer> findVirtualBusyVehiculeIds(LocalDateTime timeSlot, List<AssignationWithDetails> virtualAssignations) {
-        Set<Integer> busy = new HashSet<>();
-        for (AssignationWithDetails va : virtualAssignations) {
-            if ((va.getDepartAeroport().isBefore(timeSlot) || va.getDepartAeroport().equals(timeSlot)) && (va.getRetourAeroport() == null || va.getRetourAeroport().isAfter(timeSlot))) {
-                busy.add(va.getVehiculeId());
-            }
-        }
-        return busy;
-    }
-    
-    private void calculateAndUpdateDateRetourForVirtualAssignations(List<AssignationWithDetails> virtualAssignations, Map<Integer, Hotel> hotelById) throws Exception {
-        for (AssignationWithDetails va : virtualAssignations) {
-            calculateAndUpdateDateRetourForAVirtualAssignation(va, hotelById);
-        }
-    }
-
-    private void calculateAndUpdateDateRetourForAVirtualAssignation(AssignationWithDetails va, Map<Integer, Hotel> hotelById) throws Exception {
-        List<Integer> lieuxIds = new ArrayList<>();
-        for (AssignationWithDetails.ReservationWithHotel rwh : va.getReservations()) {
-            if (rwh.getIdHotel() != null) {
-                Hotel h = hotelById.get(rwh.getIdHotel());
-                if (h != null && h.getIdLieu() != null) {
-                    lieuxIds.add(h.getIdLieu());
-                }
-            }
-        }
-        if (!lieuxIds.isEmpty()) {
-            BigDecimal totalDist = BigDecimal.ZERO;
-            List<Integer> temp = new ArrayList<>(lieuxIds);
-            List<Integer> sortedLieuxIds = new ArrayList<>();
-            List<BigDecimal> segmentDistances = new ArrayList<>();
-            Integer aeroportId = distanceRepo.getLieuIdByCode("AIR");
-            Integer current = aeroportId;
-            while (!temp.isEmpty()) {
-                Map.Entry<Integer, BigDecimal> nearest = distanceRepo.findNearest(current, temp);
-                if (nearest == null)
-                    break;
-                sortedLieuxIds.add(nearest.getKey());
-                segmentDistances.add(nearest.getValue());
-                totalDist = totalDist.add(nearest.getValue());
-                temp.remove(nearest.getKey());
-                current = nearest.getKey();
-            }
-            BigDecimal retourDist = distanceRepo.getDistanceBetween(current, aeroportId);
-            segmentDistances.add(retourDist);
-            totalDist = totalDist.add(retourDist);
-            String vmString = paramRepo.getValueByKey("vm");
-            if (vmString == null) {
-                throw new RuntimeException("Parameter 'vm' not found in database");
-            }
-            double vm = Double.parseDouble(vmString);
-            double roundTripHours = (totalDist.doubleValue()) / vm;
-            va.setRetourAeroport(va.getDepartAeroport().plusMinutes((long) (roundTripHours * 60)));
-
-            List<String> lieuxNoms = lieuRepo.getLibelle(sortedLieuxIds);
-            va.setTrajetLieuxNoms(lieuxNoms);
-            va.setTrajetSegmentDistances(segmentDistances);
-            va.setTrajetTotalDistance(totalDist);
-        }
-    }
-
-    private AssignationWithDetails.ReservationWithHotel buildReservationWithHotel(Reservation r,
-            Map<Integer, Hotel> hotelById) {
-        AssignationWithDetails.ReservationWithHotel rwh = new AssignationWithDetails.ReservationWithHotel();
-        rwh.setReservationId(r.getId());
-        rwh.setIdClient(r.getIdClient());
-        rwh.setNbPassager(r.getNbPassager());
-        rwh.setNbPersPrises(r.getNbPassager());
-        rwh.setDateHeureArrivee(r.getDateHeureArrivee());
-        rwh.setIdHotel(r.getIdHotel());
-        if (r.getIdHotel() != null) {
-            Hotel h = hotelById.get(r.getIdHotel());
-            if (h != null)
-                rwh.setHotelNom(h.getNom());
-        }
-        return rwh;
-    }
 
     public int assignReservationsForDate(LocalDate date) throws Exception {
-        // Get average velocity from param
-        String vmString = paramRepo.getValueByKey("vm");
-        if (vmString == null) {
-            throw new RuntimeException("Parameter 'vm' not found in database");
-        }
-        double vm = Double.parseDouble(vmString);
+        int ta = getTa();
 
-        // Supp les assignations dans la base a cette date
-        List<Assignation> listAssignations = assignationRepo.getByDepartAeroport(date.atStartOfDay());
-        for (Assignation a : listAssignations) {
-            List<AssignationDetail> details = assignationDetailRepo.findByAssignationId(a.getId());
-            for (AssignationDetail d : details) {
-                assignationDetailRepo.deleteById(d.getId());
-                System.out.println("Details supprimes");
+        debug("assignReservationsForDate START date=" + date + " ta=" + ta);
+
+        // Single bulk delete by date for existing assignations and details.
+        int deleted = assignationRepo.deleteByDepartDate(date);
+        debug("deleted assignations for date=" + date + " count=" + deleted);
+
+        List<Reservation> pendingReservations = getUnassignedReservationsForDate(date);
+        pendingReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+        debugReservations("initial pending reservations", pendingReservations);
+
+        Set<Integer> createdAssignationIds = new HashSet<>();
+        List<Reservation> deferredToNextGroup = new ArrayList<>();
+
+        while (!pendingReservations.isEmpty() || !deferredToNextGroup.isEmpty()) {
+            LocalDateTime groupStart;
+            if (!pendingReservations.isEmpty()) {
+                groupStart = pendingReservations.get(0).getDateHeureArrivee();
+            } else {
+                groupStart = deferredToNextGroup.stream()
+                        .map(Reservation::getDateHeureArrivee)
+                        .min(LocalDateTime::compareTo)
+                        .orElseThrow(() -> new RuntimeException("No group start found for deferred reservations"));
+            }
+            LocalDateTime windowEnd = groupStart.plusMinutes(ta);
+            debug("processing window start=" + groupStart + " end=" + windowEnd + " pendingCount=" + pendingReservations.size() + " deferredCarryCount=" + deferredToNextGroup.size());
+
+            List<Reservation> windowReservations = extractWindowReservations(pendingReservations, windowEnd);
+            if (!deferredToNextGroup.isEmpty()) {
+                windowReservations.addAll(deferredToNextGroup);
+                deferredToNextGroup.clear();
+                windowReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+            }
+            debugReservations("window reservations", windowReservations);
+
+            GroupAssignmentResult result = assignWindowWithFallback(windowReservations, windowEnd);
+
+            createdAssignationIds.addAll(result.getCreatedAssignationIds());
+            debug("window result assigned=" + result.hasAssigned() +
+                    " createdAssignationIds=" + result.getCreatedAssignationIds() +
+                    " deferredCount=" + result.getDeferredReservations().size());
+            debugReservations("deferred reservations", result.getDeferredReservations());
+
+            if (result.hasAssigned() && !result.getCreatedAssignationIds().isEmpty()) {
+                // Critical for chained groups in the same day: make retour_aeroport visible
+                // immediately so vehicles can become available later in the planning run.
+                updateRetoursForAssignationIds(result.getCreatedAssignationIds());
             }
 
-            assignationRepo.deleteById(a.getId());
-            System.out.println("Assignation supprime");
-        }
+            if (result.hasAssigned() && !result.getDeferredReservations().isEmpty()) {
+                deferredToNextGroup.addAll(result.getDeferredReservations());
+                deferredToNextGroup.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+                debugReservations("deferred carry to next group", deferredToNextGroup);
+            } else if (!result.hasAssigned() && !result.getDeferredReservations().isEmpty()) {
+                // No progress for this window: keep later timestamps for next windows,
+                // drop only the earliest timestamp batch to avoid infinite loops.
+                LocalDateTime earliestDeferred = result.getDeferredReservations().stream()
+                        .map(Reservation::getDateHeureArrivee)
+                        .min(LocalDateTime::compareTo)
+                        .orElse(null);
 
-        List<Reservation> unassignedReservations = getUnassignedReservationsForDate(date);
-        unassignedReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+                if (earliestDeferred != null) {
+                    List<Reservation> carryForward = result.getDeferredReservations().stream()
+                            .filter(r -> r.getDateHeureArrivee().isAfter(earliestDeferred))
+                            .collect(Collectors.toList());
 
-        Map<LocalDateTime, List<Reservation>> groups = groupReservations(unassignedReservations);
-        // for (Reservation r : unassignedReservations) {
-        //     LocalDateTime key = r.getDateHeureArrivee();
-        //     List<Reservation> list = groups.get(key);
-        //     if (list == null) {
-        //         list = new ArrayList<>();
-        //         groups.put(key, list);
-        //     }
-        //     list.add(r);
-        // }
-
-        for (List<Reservation> reservations : groups.values()) {
-            reservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed()); // pr que le nb de passager
-                                                                                            // soit decroissant
-        }
-
-        List<Assignation> assignations = new ArrayList<>();
-        for (LocalDateTime dateEntry : groups.keySet()) {
-            List<Reservation> reservations = groups.get(dateEntry);
-            List<Assignation> assignationsForGroup = new ArrayList<>();
-            for (Reservation r : reservations) {
-                Assignation a = assignReservation(r, date, dateEntry);
-                if (a != null && assignations.stream().noneMatch(x -> x != null && x.getId().equals(a.getId()))) {
-                    assignations.add(a);
-                    assignationsForGroup.add(a);
+                    if (!carryForward.isEmpty()) {
+                        pendingReservations.addAll(carryForward);
+                        pendingReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
+                        debugReservations("pending after carry-forward", pendingReservations);
+                    } else {
+                        debug("no carry-forward reservations after no-progress window; earliest deferred timestamp dropped=" + earliestDeferred);
+                    }
                 }
             }
-
-            boolean updateRetour = calculateAndUpdateRetourAeroport(assignationsForGroup);
         }
 
-        return assignations.size();
+        debug("assignReservationsForDate END date=" + date + " createdAssignationIds=" + createdAssignationIds);
+
+        return createdAssignationIds.size();
+    }
+
+    private void updateRetoursForAssignationIds(Set<Integer> assignationIds) {
+        List<Assignation> assignations = new ArrayList<>();
+        for (Integer id : assignationIds) {
+            Assignation a = assignationRepo.findById(id);
+            if (a != null) {
+                assignations.add(a);
+            }
+        }
+        calculateAndUpdateRetourAeroport(assignations);
+    }
+
+    private int getTa() throws Exception {
+        String taString = paramRepo.getValueByKey("ta");
+        if (taString == null) {
+            throw new RuntimeException("Parameter 'ta' not found");
+        }
+        return Integer.parseInt(taString);
+    }
+
+    private List<Reservation> extractWindowReservations(List<Reservation> pendingReservations, LocalDateTime windowEnd) {
+        List<Reservation> windowReservations = new ArrayList<>();
+
+        int idx = 0;
+        while (idx < pendingReservations.size()
+                && !pendingReservations.get(idx).getDateHeureArrivee().isAfter(windowEnd)) {
+            windowReservations.add(pendingReservations.get(idx));
+            idx++;
+        }
+
+        pendingReservations.subList(0, idx).clear();
+        return windowReservations;
+    }
+
+    private GroupAssignmentResult assignWindowWithFallback(List<Reservation> windowReservations, LocalDateTime windowEnd)
+            throws Exception {
+        List<Reservation> working = new ArrayList<>(windowReservations);
+        List<Reservation> deferred = new ArrayList<>();
+        Set<Integer> createdAssignationIds = new HashSet<>();
+
+        debug("assignWindowWithFallback START windowEnd=" + windowEnd + " reservations=" + working.size());
+
+        while (!working.isEmpty()) {
+            LocalDateTime currentDeparture = working.stream()
+                    .map(Reservation::getDateHeureArrivee)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(null);
+
+            if (currentDeparture == null) {
+                break;
+            }
+
+            debug("trying currentDeparture=" + currentDeparture + " workingCount=" + working.size());
+            LocalDateTime feasibleDeparture = findEarliestFeasibleDeparture(working, currentDeparture, windowEnd);
+            if (feasibleDeparture != null) {
+                debug("feasibleDeparture found=" + feasibleDeparture + " for workingCount=" + working.size());
+                createdAssignationIds.addAll(assignReservationsAtDeparture(working, feasibleDeparture));
+                debug("created assignation ids in window=" + createdAssignationIds);
+                return new GroupAssignmentResult(deferred, createdAssignationIds, true);
+            }
+
+            // Cannot assign this full set in the waiting window: push latest reservations to next group.
+            List<Reservation> latestReservations = working.stream()
+                    .filter(r -> r.getDateHeureArrivee().equals(currentDeparture))
+                    .collect(Collectors.toList());
+
+            deferred.addAll(latestReservations);
+            working.removeAll(latestReservations);
+            debugReservations("latest reservations deferred", latestReservations);
+            debugReservations("working after defer", working);
+        }
+
+        // Nothing was assignable from this window.
+        debug("assignWindowWithFallback END with no assignment, deferredCount=" + deferred.size());
+        return new GroupAssignmentResult(deferred, createdAssignationIds, false);
+    }
+
+    private LocalDateTime findEarliestFeasibleDeparture(List<Reservation> reservations,
+            LocalDateTime departureMin,
+            LocalDateTime departureMax) throws Exception {
+        LocalDateTime current = departureMin;
+        debug("search feasible departure between " + departureMin + " and " + departureMax);
+        while (!current.isAfter(departureMax)) {
+            if (canAssignAllAtDeparture(reservations, current)) {
+                debug("departure feasible at " + current);
+                return current;
+            }
+            current = current.plusMinutes(1);
+        }
+        debug("no feasible departure in interval");
+        return null;
+    }
+
+    private boolean canAssignAllAtDeparture(List<Reservation> reservations, LocalDateTime departure) throws Exception {
+        List<Integer> remainingCapacities = new ArrayList<>();
+
+        List<AssignationWithDetails> existingAssignations = assignationRepo.findWithDetailsByDateAndDepartAeroport(departure);
+        for (AssignationWithDetails awd : existingAssignations) {
+            Integer restePlace = awd.getRestePlace();
+            if (restePlace != null && restePlace > 0) {
+                remainingCapacities.add(restePlace);
+            }
+        }
+
+        Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(departure);
+        List<Integer> freeVehicleCapacities = vehiculeRepo.findAll().stream()
+                .filter(v -> !busyVehiculeIds.contains(v.getId()))
+                .map(Vehicule::getPlace)
+                .sorted()
+                .collect(Collectors.toList());
+
+        debug("canAssignAllAtDeparture departure=" + departure +
+                " existingBins=" + remainingCapacities +
+                " busyVehiculeIds=" + busyVehiculeIds +
+                " freeVehicleCaps=" + freeVehicleCapacities);
+
+        List<Reservation> sortedReservations = new ArrayList<>(reservations);
+        sortedReservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
+
+        debugReservations("reservations sorted by pax", sortedReservations);
+
+        for (Reservation r : sortedReservations) {
+            int pax = r.getNbPassager();
+            int idxBin = findBestFitCapacityIndex(remainingCapacities, pax);
+            if (idxBin >= 0) {
+                remainingCapacities.set(idxBin, remainingCapacities.get(idxBin) - pax);
+                debug("reservation id=" + r.getId() + " pax=" + pax + " fit existing bin idx=" + idxBin + " binsNow=" + remainingCapacities);
+                continue;
+            }
+
+            int idxVeh = findBestFitCapacityIndex(freeVehicleCapacities, pax);
+            if (idxVeh < 0) {
+                debug("reservation id=" + r.getId() + " pax=" + pax + " cannot fit any vehicle at departure=" + departure);
+                return false;
+            }
+
+            int vehCapacity = freeVehicleCapacities.remove(idxVeh);
+            remainingCapacities.add(vehCapacity - pax);
+            debug("reservation id=" + r.getId() + " pax=" + pax + " uses new vehicle capacity=" + vehCapacity + " binsNow=" + remainingCapacities + " freeVehicleCapsNow=" + freeVehicleCapacities);
+        }
+
+        debug("all reservations fit at departure=" + departure);
+        return true;
+    }
+
+    private int findBestFitCapacityIndex(List<Integer> capacities, int required) {
+        int bestIndex = -1;
+        int bestCapacity = Integer.MAX_VALUE;
+
+        for (int i = 0; i < capacities.size(); i++) {
+            int cap = capacities.get(i);
+            if (cap >= required && cap < bestCapacity) {
+                bestCapacity = cap;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private Set<Integer> assignReservationsAtDeparture(List<Reservation> reservations, LocalDateTime departure)
+            throws Exception {
+        List<Reservation> sortedReservations = new ArrayList<>(reservations);
+        sortedReservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
+
+        debug("assignReservationsAtDeparture departure=" + departure + " reservationCount=" + sortedReservations.size());
+        debugReservations("assign order", sortedReservations);
+
+        Set<Integer> createdAssignationIds = new HashSet<>();
+        for (Reservation r : sortedReservations) {
+            Assignation a = assignReservation(r, departure);
+            if (a != null && a.getId() != null) {
+                createdAssignationIds.add(a.getId());
+                debug("reservation id=" + r.getId() + " assigned to assignation id=" + a.getId());
+            } else {
+                debug("reservation id=" + r.getId() + " NOT assigned at departure=" + departure);
+            }
+        }
+
+        return createdAssignationIds;
     }
 
     private List<Reservation> getUnassignedReservationsForDate(LocalDate date) {
@@ -348,7 +387,7 @@ public class AssignationService {
         return selectBestVehicle(pasDansMap, r.getNbPassager());
     }
 
-    private Assignation assignationExistanteDisponible(Reservation r, LocalDate date, LocalDateTime dateDepartMax) throws Exception {
+    private Assignation assignationExistanteDisponible(Reservation r, LocalDateTime dateDepartMax) throws Exception {
         try {
             List<AssignationWithDetails> vehiculesDispos = assignationRepo.findWithDetailsByDateAndDepartAeroport(dateDepartMax);
 
@@ -375,22 +414,61 @@ public class AssignationService {
         }
     }
 
-    public Assignation assignReservation(Reservation reservation, LocalDate date, LocalDateTime dateDepartMax) throws Exception {
-        Assignation existante = assignationExistanteDisponible(reservation, date, dateDepartMax);
+    public Assignation assignReservation(Reservation reservation, LocalDateTime dateDepartMax) throws Exception {
+        Assignation existante = assignationExistanteDisponible(reservation, dateDepartMax);
         if (existante != null) {
             assignationDetailRepo.createDetail(existante.getId(), reservation.getId(), reservation.getNbPassager());
+            debug("assignReservation reservationId=" + reservation.getId() + " reused assignationId=" + existante.getId() + " departure=" + dateDepartMax);
             return existante;
         }
 
         Vehicule vehicule = trouverNouveauVehicule(reservation, dateDepartMax);
         if (vehicule == null) {
             System.err.println("Aucun véhicule disponible pour la réservation " + reservation.getId());
+            debug("assignReservation reservationId=" + reservation.getId() + " no vehicle available at departure=" + dateDepartMax);
             return null;
         }
         Integer newId = assignationRepo.createAssignation(vehicule.getId(), dateDepartMax, null);
         assignationDetailRepo.createDetail(newId, reservation.getId(), reservation.getNbPassager());
 
+        debug("assignReservation reservationId=" + reservation.getId() + " created assignationId=" + newId + " vehiculeId=" + vehicule.getId() + " departure=" + dateDepartMax);
+
         return assignationRepo.findById(newId);
+    }
+
+    private void debug(String message) {
+        if (DEBUG_ASSIGNATION) {
+            System.out.println("[ASSIGNATION-DEBUG] " + message);
+        }
+    }
+
+    private void debugReservations(String label, List<Reservation> reservations) {
+        if (!DEBUG_ASSIGNATION) {
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("[ASSIGNATION-DEBUG] ").append(label).append(": ");
+        if (reservations == null || reservations.isEmpty()) {
+            sb.append("[]");
+            System.out.println(sb);
+            return;
+        }
+
+        sb.append("[");
+        for (int i = 0; i < reservations.size(); i++) {
+            Reservation r = reservations.get(i);
+            sb.append("{id=").append(r.getId())
+              .append(", client=").append(r.getIdClient())
+              .append(", pax=").append(r.getNbPassager())
+              .append(", t=").append(r.getDateHeureArrivee())
+              .append("}");
+            if (i < reservations.size() - 1) {
+                sb.append(", ");
+            }
+        }
+        sb.append("]");
+        System.out.println(sb);
     }
 
     private Vehicule selectBestVehicle(List<Vehicule> vehicles, Integer requiredCapacity) {
