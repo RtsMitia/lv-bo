@@ -79,4 +79,15 @@ public class AssignationDetailRepository {
             throw new RuntimeException("Error creating assignation detail", e);
         }
     }
+
+    public void deleteById(Integer id) {
+        String sql = "DELETE FROM assignation_detail WHERE id = ?";
+        try (Connection c = ds.getConnection();
+            PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("Error while deleting assignations with id = " + id, e);
+        }
+    }
 }

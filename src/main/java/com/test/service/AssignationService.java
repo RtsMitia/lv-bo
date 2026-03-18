@@ -253,6 +253,19 @@ public class AssignationService {
         }
         double vm = Double.parseDouble(vmString);
 
+        // Supp les assignations dans la base a cette date
+        List<Assignation> listAssignations = assignationRepo.getByDepartAeroport(date.atStartOfDay());
+        for (Assignation a : listAssignations) {
+            List<AssignationDetail> details = assignationDetailRepo.findByAssignationId(a.getId());
+            for (AssignationDetail d : details) {
+                assignationDetailRepo.deleteById(d.getId());
+                System.out.println("Details supprimes");
+            }
+
+            assignationRepo.deleteById(a.getId());
+            System.out.println("Assignation supprime");
+        }
+
         List<Reservation> unassignedReservations = getUnassignedReservationsForDate(date);
         unassignedReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
 
