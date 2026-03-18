@@ -15,8 +15,6 @@ import java.util.stream.Collectors;
  */
 public class AssignationService {
 
-    private static final boolean DEBUG_ASSIGNATION = true;
-
     private final ReservationRepository reservationRepo;
     private final VehiculeRepository vehiculeRepo;
     private final HotelRepository hotelRepo;
@@ -80,15 +78,11 @@ public class AssignationService {
     public int assignReservationsForDate(LocalDate date) throws Exception {
         int ta = getTa();
 
-        debug("assignReservationsForDate START date=" + date + " ta=" + ta);
-
         // Single bulk delete by date for existing assignations and details.
         int deleted = assignationRepo.deleteByDepartDate(date);
-        debug("deleted assignations for date=" + date + " count=" + deleted);
 
         List<Reservation> pendingReservations = getUnassignedReservationsForDate(date);
         pendingReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
-        debugReservations("initial pending reservations", pendingReservations);
 
         Set<Integer> createdAssignationIds = new HashSet<>();
         List<Reservation> deferredToNextGroup = new ArrayList<>();
@@ -104,7 +98,6 @@ public class AssignationService {
                         .orElseThrow(() -> new RuntimeException("No group start found for deferred reservations"));
             }
             LocalDateTime windowEnd = groupStart.plusMinutes(ta);
-            debug("processing window start=" + groupStart + " end=" + windowEnd + " pendingCount=" + pendingReservations.size() + " deferredCarryCount=" + deferredToNextGroup.size());
 
             List<Reservation> windowReservations = extractWindowReservations(pendingReservations, windowEnd);
             if (!deferredToNextGroup.isEmpty()) {
@@ -112,15 +105,10 @@ public class AssignationService {
                 deferredToNextGroup.clear();
                 windowReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
             }
-            debugReservations("window reservations", windowReservations);
 
             GroupAssignmentResult result = assignWindowWithFallback(windowReservations, windowEnd);
 
             createdAssignationIds.addAll(result.getCreatedAssignationIds());
-            debug("window result assigned=" + result.hasAssigned() +
-                    " createdAssignationIds=" + result.getCreatedAssignationIds() +
-                    " deferredCount=" + result.getDeferredReservations().size());
-            debugReservations("deferred reservations", result.getDeferredReservations());
 
             if (result.hasAssigned() && !result.getCreatedAssignationIds().isEmpty()) {
                 // Critical for chained groups in the same day: make retour_aeroport visible
@@ -131,7 +119,6 @@ public class AssignationService {
             if (result.hasAssigned() && !result.getDeferredReservations().isEmpty()) {
                 deferredToNextGroup.addAll(result.getDeferredReservations());
                 deferredToNextGroup.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
-                debugReservations("deferred carry to next group", deferredToNextGroup);
             } else if (!result.hasAssigned() && !result.getDeferredReservations().isEmpty()) {
                 // No progress for this window: keep later timestamps for next windows,
                 // drop only the earliest timestamp batch to avoid infinite loops.
@@ -148,15 +135,10 @@ public class AssignationService {
                     if (!carryForward.isEmpty()) {
                         pendingReservations.addAll(carryForward);
                         pendingReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
-                        debugReservations("pending after carry-forward", pendingReservations);
-                    } else {
-                        debug("no carry-forward reservations after no-progress window; earliest deferred timestamp dropped=" + earliestDeferred);
                     }
                 }
             }
         }
-
-        debug("assignReservationsForDate END date=" + date + " createdAssignationIds=" + createdAssignationIds);
 
         return createdAssignationIds.size();
     }
@@ -200,8 +182,6 @@ public class AssignationService {
         List<Reservation> deferred = new ArrayList<>();
         Set<Integer> createdAssignationIds = new HashSet<>();
 
-        debug("assignWindowWithFallback START windowEnd=" + windowEnd + " reservations=" + working.size());
-
         while (!working.isEmpty()) {
             LocalDateTime currentDeparture = working.stream()
                     .map(Reservation::getDateHeureArrivee)
@@ -212,12 +192,9 @@ public class AssignationService {
                 break;
             }
 
-            debug("trying currentDeparture=" + currentDeparture + " workingCount=" + working.size());
             LocalDateTime feasibleDeparture = findEarliestFeasibleDeparture(working, currentDeparture, windowEnd);
             if (feasibleDeparture != null) {
-                debug("feasibleDeparture found=" + feasibleDeparture + " for workingCount=" + working.size());
                 createdAssignationIds.addAll(assignReservationsAtDeparture(working, feasibleDeparture));
-                debug("created assignation ids in window=" + createdAssignationIds);
                 return new GroupAssignmentResult(deferred, createdAssignationIds, true);
             }
 
@@ -228,12 +205,9 @@ public class AssignationService {
 
             deferred.addAll(latestReservations);
             working.removeAll(latestReservations);
-            debugReservations("latest reservations deferred", latestReservations);
-            debugReservations("working after defer", working);
         }
 
         // Nothing was assignable from this window.
-        debug("assignWindowWithFallback END with no assignment, deferredCount=" + deferred.size());
         return new GroupAssignmentResult(deferred, createdAssignationIds, false);
     }
 
@@ -241,15 +215,12 @@ public class AssignationService {
             LocalDateTime departureMin,
             LocalDateTime departureMax) throws Exception {
         LocalDateTime current = departureMin;
-        debug("search feasible departure between " + departureMin + " and " + departureMax);
         while (!current.isAfter(departureMax)) {
             if (canAssignAllAtDeparture(reservations, current)) {
-                debug("departure feasible at " + current);
                 return current;
             }
             current = current.plusMinutes(1);
         }
-        debug("no feasible departure in interval");
         return null;
     }
 
@@ -271,37 +242,25 @@ public class AssignationService {
                 .sorted()
                 .collect(Collectors.toList());
 
-        debug("canAssignAllAtDeparture departure=" + departure +
-                " existingBins=" + remainingCapacities +
-                " busyVehiculeIds=" + busyVehiculeIds +
-                " freeVehicleCaps=" + freeVehicleCapacities);
-
         List<Reservation> sortedReservations = new ArrayList<>(reservations);
         sortedReservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
-
-        debugReservations("reservations sorted by pax", sortedReservations);
 
         for (Reservation r : sortedReservations) {
             int pax = r.getNbPassager();
             int idxBin = findBestFitCapacityIndex(remainingCapacities, pax);
             if (idxBin >= 0) {
                 remainingCapacities.set(idxBin, remainingCapacities.get(idxBin) - pax);
-                debug("reservation id=" + r.getId() + " pax=" + pax + " fit existing bin idx=" + idxBin + " binsNow=" + remainingCapacities);
                 continue;
             }
 
             int idxVeh = findBestFitCapacityIndex(freeVehicleCapacities, pax);
             if (idxVeh < 0) {
-                debug("reservation id=" + r.getId() + " pax=" + pax + " cannot fit any vehicle at departure=" + departure);
                 return false;
             }
 
             int vehCapacity = freeVehicleCapacities.remove(idxVeh);
             remainingCapacities.add(vehCapacity - pax);
-            debug("reservation id=" + r.getId() + " pax=" + pax + " uses new vehicle capacity=" + vehCapacity + " binsNow=" + remainingCapacities + " freeVehicleCapsNow=" + freeVehicleCapacities);
         }
-
-        debug("all reservations fit at departure=" + departure);
         return true;
     }
 
@@ -325,17 +284,11 @@ public class AssignationService {
         List<Reservation> sortedReservations = new ArrayList<>(reservations);
         sortedReservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
 
-        debug("assignReservationsAtDeparture departure=" + departure + " reservationCount=" + sortedReservations.size());
-        debugReservations("assign order", sortedReservations);
-
         Set<Integer> createdAssignationIds = new HashSet<>();
         for (Reservation r : sortedReservations) {
             Assignation a = assignReservation(r, departure);
             if (a != null && a.getId() != null) {
                 createdAssignationIds.add(a.getId());
-                debug("reservation id=" + r.getId() + " assigned to assignation id=" + a.getId());
-            } else {
-                debug("reservation id=" + r.getId() + " NOT assigned at departure=" + departure);
             }
         }
 
@@ -384,7 +337,7 @@ public class AssignationService {
             return null;
         }
 
-        return selectBestVehicle(pasDansMap, r.getNbPassager());
+        return selectBestVehicle(pasDansMap, r.getNbPassager(), dateMax.toLocalDate());
     }
 
     private Assignation assignationExistanteDisponible(Reservation r, LocalDateTime dateDepartMax) throws Exception {
@@ -418,64 +371,38 @@ public class AssignationService {
         Assignation existante = assignationExistanteDisponible(reservation, dateDepartMax);
         if (existante != null) {
             assignationDetailRepo.createDetail(existante.getId(), reservation.getId(), reservation.getNbPassager());
-            debug("assignReservation reservationId=" + reservation.getId() + " reused assignationId=" + existante.getId() + " departure=" + dateDepartMax);
             return existante;
         }
 
         Vehicule vehicule = trouverNouveauVehicule(reservation, dateDepartMax);
         if (vehicule == null) {
             System.err.println("Aucun véhicule disponible pour la réservation " + reservation.getId());
-            debug("assignReservation reservationId=" + reservation.getId() + " no vehicle available at departure=" + dateDepartMax);
             return null;
         }
         Integer newId = assignationRepo.createAssignation(vehicule.getId(), dateDepartMax, null);
         assignationDetailRepo.createDetail(newId, reservation.getId(), reservation.getNbPassager());
 
-        debug("assignReservation reservationId=" + reservation.getId() + " created assignationId=" + newId + " vehiculeId=" + vehicule.getId() + " departure=" + dateDepartMax);
-
         return assignationRepo.findById(newId);
     }
 
-    private void debug(String message) {
-        if (DEBUG_ASSIGNATION) {
-            System.out.println("[ASSIGNATION-DEBUG] " + message);
-        }
-    }
-
-    private void debugReservations(String label, List<Reservation> reservations) {
-        if (!DEBUG_ASSIGNATION) {
-            return;
+    private Vehicule selectBestVehicle(List<Vehicule> vehicles, Integer requiredCapacity, LocalDate tripDate) {
+        Map<Integer, Integer> tripsPerVehicle = new HashMap<>();
+        for (Vehicule v : vehicles) {
+            int trips = assignationRepo.countTripsForVehiculeOnDate(v.getId(), tripDate);
+            tripsPerVehicle.put(v.getId(), trips);
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("[ASSIGNATION-DEBUG] ").append(label).append(": ");
-        if (reservations == null || reservations.isEmpty()) {
-            sb.append("[]");
-            System.out.println(sb);
-            return;
-        }
-
-        sb.append("[");
-        for (int i = 0; i < reservations.size(); i++) {
-            Reservation r = reservations.get(i);
-            sb.append("{id=").append(r.getId())
-              .append(", client=").append(r.getIdClient())
-              .append(", pax=").append(r.getNbPassager())
-              .append(", t=").append(r.getDateHeureArrivee())
-              .append("}");
-            if (i < reservations.size() - 1) {
-                sb.append(", ");
-            }
-        }
-        sb.append("]");
-        System.out.println(sb);
-    }
-
-    private Vehicule selectBestVehicle(List<Vehicule> vehicles, Integer requiredCapacity) {
         vehicles.sort((v1, v2) -> {
             int placeCompare = Integer.compare(v1.getPlace(), v2.getPlace());
             if (placeCompare != 0) {
                 return placeCompare;
+            }
+
+            int tripsV1 = tripsPerVehicle.getOrDefault(v1.getId(), 0);
+            int tripsV2 = tripsPerVehicle.getOrDefault(v2.getId(), 0);
+            int tripsCompare = Integer.compare(tripsV1, tripsV2);
+            if (tripsCompare != 0) {
+                return tripsCompare;
             }
 
             String type1 = v1.getTypeCarburant();

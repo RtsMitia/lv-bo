@@ -327,6 +327,28 @@ public class AssignationRepository {
         return busyIds;
     }
 
+    /**
+     * Count how many trips a vehicle has on a given departure date.
+     */
+    public int countTripsForVehiculeOnDate(Integer vehiculeId, LocalDate date) {
+        String sql = "SELECT COUNT(*) AS trip_count FROM assignation WHERE vehicule = ? AND CAST(depart_aeroport AS DATE) = ?";
+
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, vehiculeId);
+            ps.setDate(2, java.sql.Date.valueOf(date));
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("trip_count");
+                }
+            }
+            return 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("Error counting trips for vehicule=" + vehiculeId + " date=" + date, e);
+        }
+    }
+
     public List<Integer> findLieuxIds(Integer assignationId) {
         String sql = "SELECT DISTINCT h.id_lieu FROM assignation a " +
                 "JOIN assignation_detail ad ON a.id = ad.id_association " +
