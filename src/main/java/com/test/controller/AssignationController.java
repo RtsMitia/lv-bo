@@ -61,27 +61,11 @@ public class AssignationController {
         try {
             LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
 
-            List<AssignationWithDetails> simulatedAssignations = assignationService.simulateAssignationsForDate(localDate);
-            List<AssignationWithDetails> assignationsWithDetailsBase = assignationRepository.findWithDetailsByDate(localDate);
-            
-            List<AssignationWithDetails> assignationsWithDetails = new java.util.ArrayList<>(assignationsWithDetailsBase);
-            assignationsWithDetails.addAll(simulatedAssignations);
-        
+            int assignedCount = assignationService.assignReservationsForDate(localDate);
 
-            java.util.Set<Integer> coveredIds = new java.util.HashSet<>();
-            for (AssignationWithDetails awd : simulatedAssignations) {
-                for (AssignationWithDetails.ReservationWithHotel rwh : awd.getReservations()) {
-                    coveredIds.add(rwh.getReservationId());
-                }
-            }
-            List<Reservation> unassignedReservationsBase = reservationRepository.findUnassignedByDate(localDate);
-            
-            List<Reservation> unassignedReservations = new java.util.ArrayList<>();
-            for (Reservation r : unassignedReservationsBase) {
-                if (!coveredIds.contains(r.getId())) {
-                    unassignedReservations.add(r);
-                }
-            }
+            List<AssignationWithDetails> assignationsWithDetails = assignationRepository.findWithDetailsByDate(localDate);
+            enrichAssignationsWithTrajet(assignationsWithDetails);
+            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
 
             Map<Integer, String> hotelMap = new HashMap<>();
             List<Hotel> hotels = hotelRepository.findAll();
@@ -95,7 +79,8 @@ public class AssignationController {
             mv.addItem("assignations", assignationsWithDetails);
             mv.addItem("unassignedReservations", unassignedReservations);
             mv.addItem("hotelMap", hotelMap);
-            mv.addItem("isSimulation", true);
+            mv.addItem("assignedCount", assignedCount);
+            mv.addItem("isSimulation", false);
             mv.addItem("content", "assignation/assignation_list.jsp");
             return mv;
 
@@ -111,42 +96,7 @@ public class AssignationController {
     @ManageUrl("/save")
     @MyPOST
     public ModelView saveAssignations(String date) {
-        if (date == null || date.isEmpty()) {
-            ModelView mv = new ModelView("layout.jsp");
-            mv.addItem("content", "assignation/assignation_date_form.jsp");
-            mv.addItem("error", "Date manquante");
-            return mv;
-        }
-        try {
-            LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
-            int assignedCount = assignationService.assignReservationsForDate(localDate);
-
-            List<AssignationWithDetails> assignations = assignationRepository.findWithDetailsByDate(localDate);
-            enrichAssignationsWithTrajet(assignations);
-            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
-
-            Map<Integer, String> hotelMap = new HashMap<>();
-            List<Hotel> hotels = hotelRepository.findAll();
-            for (Hotel h : hotels)
-                hotelMap.put(h.getId(), h.getNom());
-
-            ModelView mv = new ModelView("layout.jsp");
-            mv.addItem("date", localDate);
-            mv.addItem("dateFormatted", localDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-            mv.addItem("assignations", assignations);
-            mv.addItem("unassignedReservations", unassignedReservations);
-            mv.addItem("hotelMap", hotelMap);
-            mv.addItem("assignedCount", assignedCount);
-            mv.addItem("isSimulation", false);
-            mv.addItem("content", "assignation/assignation_list.jsp");
-            return mv;
-        } catch (Exception e) {
-            e.printStackTrace();
-            ModelView mv = new ModelView("layout.jsp");
-            mv.addItem("error", "Erreur lors de l'enregistrement: " + e.getMessage());
-            mv.addItem("content", "assignation/assignation_date_form.jsp");
-            return mv;
-        }
+        return showAssignationList(date);
     }
 
     @ManageUrl("/detail/{id}")

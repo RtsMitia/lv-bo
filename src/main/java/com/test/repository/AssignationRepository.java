@@ -432,4 +432,44 @@ public class AssignationRepository {
             throw new Exception("Error fetching assignation details for id " + assignationId, e);
         }
     }
+
+    public List<Assignation> getByDepartAeroport(LocalDateTime date) {
+        String sql = "SELECT * FROM assignation a WHERE a.depart_aeroport = ?";
+        List<Assignation> list = new ArrayList<>();
+
+         try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.valueOf(date));
+            try(ResultSet rs = ps.executeQuery()) {
+                while(rs.next()) {
+                    Assignation a = new Assignation();
+                    a.setId(rs.getInt("id"));
+                    a.setVehicule(rs.getInt("vehicule"));
+                    
+                    Timestamp departAeroport = rs.getTimestamp("depart_aeroport");
+                    Timestamp retourAeroport = rs.getTimestamp("retour_aeroport");
+
+                    a.setDepartAeroport(departAeroport.toLocalDateTime());
+                    a.setRetourAeroport(retourAeroport.toLocalDateTime());
+
+                    list.add(a);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la recuperation des assignations");
+        }
+        
+        return list;
+    }
+
+    public void deleteById(Integer id) {
+        String sql = "DELETE FROM assignation WHERE id = ?";
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("Error while deleting assignations with id = " + id, e);
+        }
+    }
 }
