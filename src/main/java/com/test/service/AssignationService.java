@@ -9,6 +9,7 @@ import com.test.repository.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -83,7 +84,7 @@ public class AssignationService {
         int ta = getTa();
 
         // Single bulk delete by date for existing assignations and details.
-        int deleted = assignationRepo.deleteByDepartDate(date);
+        assignationRepo.deleteByDepartDate(date);
 
         List<Reservation> pendingReservations = getUnassignedReservationsForDate(date);
         pendingReservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
@@ -241,92 +242,186 @@ public class AssignationService {
         }
 
         Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(departure);
-        return vehiculeRepo.findAll().stream().anyMatch(v -> !busyVehiculeIds.contains(v.getId()));
+        return vehiculeRepo.findAll().stream()
+            .anyMatch(v -> !busyVehiculeIds.contains(v.getId()) && isVehicleAvailableAt(v, departure));
     }
 
     private DepartureAssignmentResult assignReservationsAtDepartureWithSplit(List<Reservation> reservations,
             LocalDateTime departure) throws Exception {
-        List<Reservation> sortedReservations = new ArrayList<>(reservations);
-        sortedReservations.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
-
         Set<Integer> createdAssignationIds = new HashSet<>();
         List<Reservation> deferredReservations = new ArrayList<>();
         boolean assignedAnyPassenger = false;
 
-        for (Reservation reservation : sortedReservations) {
-            SplitReservationResult splitResult = assignReservationWithSplit(reservation, departure);
+        List<Reservation> pending = new ArrayList<>();
+        for (Reservation reservation : reservations) {
+            int nb = reservation.getNbPassager() != null ? reservation.getNbPassager() : 0;
+            if (nb > 0) {
+                pending.add(copyReservationWithPassengers(reservation, nb));
+            }
+        }
+        pending.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
 
-            createdAssignationIds.addAll(splitResult.getCreatedAssignationIds());
-            if (splitResult.getAssignedPassengers() > 0) {
-                assignedAnyPassenger = true;
+        Reservation prioritizedRemainder = null;
+
+        while (prioritizedRemainder != null || !pending.isEmpty()) {
+            Reservation toProcess;
+            if (prioritizedRemainder != null) {
+                toProcess = prioritizedRemainder;
+                prioritizedRemainder = null;
+            } else {
+                toProcess = pending.remove(0);
             }
 
-            if (splitResult.getRemainingPassengers() > 0) {
-                deferredReservations
-                        .add(copyReservationWithPassengers(reservation, splitResult.getRemainingPassengers()));
+            if (toProcess.getNbPassager() == null || toProcess.getNbPassager() <= 0) {
+                continue;
+            }
+
+            Assignation openedAssignation = null;
+            int assignedToOpenAssignation = 0;
+
+            int maxAssignableCapacity = findMaxAssignableCapacityAtDeparture(departure);
+            int initialChunk = Math.min(toProcess.getNbPassager(), maxAssignableCapacity);
+            for (int candidateChunk = initialChunk; candidateChunk >= 1; candidateChunk--) {
+                Assignation candidateAssignation = assignReservationAtomic(
+                        copyReservationWithPassengers(toProcess, candidateChunk),
+                        departure,
+                        false);
+                if (candidateAssignation != null) {
+                    openedAssignation = candidateAssignation;
+                    assignedToOpenAssignation = candidateChunk;
+                    break;
+                }
+            }
+
+            if (openedAssignation == null) {
+                deferredReservations.add(toProcess);
+                continue;
+            }
+
+            assignedAnyPassenger = true;
+            if (openedAssignation.getId() != null) {
+                createdAssignationIds.add(openedAssignation.getId());
+            }
+
+            int remainingOnProcessed = toProcess.getNbPassager() - assignedToOpenAssignation;
+            if (remainingOnProcessed > 0) {
+                prioritizedRemainder = copyReservationWithPassengers(toProcess, remainingOnProcessed);
+            }
+
+            if (openedAssignation.getId() == null) {
+                continue;
+            }
+
+            int touchedAssignationId = openedAssignation.getId();
+
+            while (true) {
+                int remainingPlace = findRemainingPlaceForAssignationAtDeparture(touchedAssignationId, departure);
+                if (remainingPlace <= 0) {
+                    break;
+                }
+
+                Reservation nearest = pickNearestReservationByCapacityGap(
+                        pending,
+                        prioritizedRemainder,
+                        remainingPlace);
+                if (nearest == null) {
+                    break;
+                }
+
+                int nearestPassengers = nearest.getNbPassager() != null ? nearest.getNbPassager() : 0;
+                if (nearestPassengers <= 0) {
+                    removeReservationFromPool(pending, nearest);
+                    if (prioritizedRemainder != null && prioritizedRemainder.getId().equals(nearest.getId())) {
+                        prioritizedRemainder = null;
+                    }
+                    continue;
+                }
+
+                int chunkForTouchedVehicle = Math.min(nearestPassengers, remainingPlace);
+                assignationDetailRepo.createDetail(
+                        touchedAssignationId,
+                        nearest.getId(),
+                        chunkForTouchedVehicle);
+                assignedAnyPassenger = true;
+
+                int remainingNearest = nearestPassengers - chunkForTouchedVehicle;
+                removeReservationFromPool(pending, nearest);
+
+                if (prioritizedRemainder != null && prioritizedRemainder.getId().equals(nearest.getId())) {
+                    prioritizedRemainder = null;
+                }
+
+                if (remainingNearest > 0) {
+                    prioritizedRemainder = copyReservationWithPassengers(nearest, remainingNearest);
+                }
             }
         }
 
         return new DepartureAssignmentResult(deferredReservations, createdAssignationIds, assignedAnyPassenger);
     }
 
-    private SplitReservationResult assignReservationWithSplit(Reservation reservation, LocalDateTime departure)
-            throws Exception {
-        int remainingPassengers = reservation.getNbPassager() != null ? reservation.getNbPassager() : 0;
-        int assignedPassengers = 0;
-        Set<Integer> createdAssignationIds = new HashSet<>();
-
-        if (remainingPassengers <= 0) {
-            return new SplitReservationResult(assignedPassengers, remainingPassengers, createdAssignationIds);
+    private int findRemainingPlaceForAssignationAtDeparture(Integer assignationId, LocalDateTime departure) {
+        if (assignationId == null) {
+            return 0;
         }
 
-        // Business rule: first try to assign the full reservation in one go.
-        Assignation fullAssignation = assignReservationAtomic(
-                copyReservationWithPassengers(reservation, remainingPassengers),
-                departure,
-                false);
-        if (fullAssignation != null) {
-            if (fullAssignation.getId() != null) {
-                createdAssignationIds.add(fullAssignation.getId());
+        return assignationRepo.findWithDetailsByDateAndDepartAeroport(departure).stream()
+                .filter(awd -> assignationId.equals(awd.getAssignationId()))
+                .map(AssignationWithDetails::getRestePlace)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(0);
+    }
+
+    private Reservation pickNearestReservationByCapacityGap(List<Reservation> pending,
+            Reservation prioritizedRemainder,
+            int targetCapacity) {
+        List<Reservation> candidates = new ArrayList<>();
+        if (prioritizedRemainder != null && prioritizedRemainder.getNbPassager() != null
+                && prioritizedRemainder.getNbPassager() > 0) {
+            candidates.add(prioritizedRemainder);
+        }
+        for (Reservation r : pending) {
+            if (r.getNbPassager() != null && r.getNbPassager() > 0) {
+                candidates.add(r);
             }
-            return new SplitReservationResult(remainingPassengers, 0, createdAssignationIds);
         }
 
-        // No single capacity can carry all passengers: split across available
-        // capacities.
-        while (remainingPassengers > 0) {
-            int maxAssignableCapacity = findMaxAssignableCapacityAtDeparture(departure);
-            if (maxAssignableCapacity <= 0) {
-                break;
-            }
+        return candidates.stream()
+                .min((r1, r2) -> {
+                    int n1 = r1.getNbPassager() != null ? r1.getNbPassager() : 0;
+                    int n2 = r2.getNbPassager() != null ? r2.getNbPassager() : 0;
 
-            int chunkSize = Math.min(remainingPassengers, maxAssignableCapacity);
-            Assignation partialAssignation = null;
+                    int gapCompare = Integer.compare(Math.abs(n1 - targetCapacity), Math.abs(n2 - targetCapacity));
+                    if (gapCompare != 0) {
+                        return gapCompare;
+                    }
 
-            for (int candidateChunk = chunkSize; candidateChunk >= 1; candidateChunk--) {
-                partialAssignation = assignReservationAtomic(
-                        copyReservationWithPassengers(reservation, candidateChunk),
-                        departure,
-                        false);
-                if (partialAssignation != null) {
-                    chunkSize = candidateChunk;
-                    break;
-                }
-            }
+                    // Tie-breaker: prefer larger groups to maximize fill when gaps are equal.
+                    int sizeCompare = Integer.compare(n2, n1);
+                    if (sizeCompare != 0) {
+                        return sizeCompare;
+                    }
 
-            if (partialAssignation == null) {
-                break;
-            }
+                    return Integer.compare(
+                            r1.getId() != null ? r1.getId() : Integer.MAX_VALUE,
+                            r2.getId() != null ? r2.getId() : Integer.MAX_VALUE);
+                })
+                .orElse(null);
+    }
 
-            if (partialAssignation.getId() != null) {
-                createdAssignationIds.add(partialAssignation.getId());
-            }
-
-            assignedPassengers += chunkSize;
-            remainingPassengers -= chunkSize;
+    private void removeReservationFromPool(List<Reservation> pending, Reservation target) {
+        if (target == null || target.getId() == null) {
+            return;
         }
 
-        return new SplitReservationResult(assignedPassengers, remainingPassengers, createdAssignationIds);
+        for (int i = 0; i < pending.size(); i++) {
+            Reservation current = pending.get(i);
+            if (target.getId().equals(current.getId())) {
+                pending.remove(i);
+                return;
+            }
+        }
     }
 
     private int findMaxAssignableCapacityAtDeparture(LocalDateTime departure) {
@@ -339,7 +434,8 @@ public class AssignationService {
 
         Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(departure);
         int maxFreeVehicleCapacity = vehiculeRepo.findAll().stream()
-                .filter(v -> !busyVehiculeIds.contains(v.getId()))
+            .filter(v -> !busyVehiculeIds.contains(v.getId()))
+            .filter(v -> isVehicleAvailableAt(v, departure))
                 .map(Vehicule::getPlace)
                 .max(Integer::compareTo)
                 .orElse(0);
@@ -402,7 +498,9 @@ public class AssignationService {
         Set<Integer> busyVehiculeIds = assignationRepo.findBusyVehiculeIds(dateMax);
 
         for (Vehicule v : all) {
-            if (!busyVehiculeIds.contains(v.getId()) && v.getPlace() >= r.getNbPassager()) {
+            if (!busyVehiculeIds.contains(v.getId())
+                    && isVehicleAvailableAt(v, dateMax)
+                    && v.getPlace() >= r.getNbPassager()) {
                 pasDansMap.add(v);
             }
         }
@@ -440,6 +538,14 @@ public class AssignationService {
         } catch (Exception e) {
             throw new Exception(e.getMessage());
         }
+    }
+
+    private boolean isVehicleAvailableAt(Vehicule vehicule, LocalDateTime departureDateTime) {
+        LocalTime heureDisponibilite = vehicule.getHeureDisponibilite();
+        if (heureDisponibilite == null) {
+            return true;
+        }
+        return !departureDateTime.toLocalTime().isBefore(heureDisponibilite);
     }
 
     public Assignation assignReservation(Reservation reservation, LocalDateTime dateDepartMax) throws Exception {

@@ -27,6 +27,7 @@
 <div class="assignation-list">
     <div style="margin-bottom: 20px;">
         <h2>Trajets du <%= dateFormatted %></h2>
+        <h1>3363, 3331, 3335</h1>
         <a href="${pageContext.request.contextPath}/assignation/date" 
            style="padding: 8px 16px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 5px; display: inline-block;">
             ← Retour

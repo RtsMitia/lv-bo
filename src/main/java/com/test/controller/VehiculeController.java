@@ -1,8 +1,9 @@
 package com.test.controller;
 
 import java.util.List;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 
-import com.fasterxml.jackson.annotation.JsonCreator.Mode;
 import com.fw.ModelView;
 import com.fw.annotations.AnnotationController;
 import com.fw.annotations.ManageUrl;
@@ -50,7 +51,8 @@ public class VehiculeController {
 
     @ManageUrl("/save") 
     @MyPOST
-    public ModelView save(String reference, Integer place, String typeCarburant, HttpServletRequest request) {
+        public ModelView save(String reference, Integer place, String typeCarburant, String heureDisponibilite,
+            HttpServletRequest request) {
         try {
             Vehicule vehicule = new Vehicule();
 
@@ -67,6 +69,15 @@ public class VehiculeController {
             vehicule.setReference(reference);
             vehicule.setPlace(place);
             vehicule.setTypeCarburant(typeCarburant);
+            if (heureDisponibilite != null && !heureDisponibilite.trim().isEmpty()) {
+                try {
+                    vehicule.setHeureDisponibilite(LocalTime.parse(heureDisponibilite.trim()));
+                } catch (DateTimeParseException e) {
+                    throw new RuntimeException("Format heure_disponibilite invalide. Attendu HH:mm", e);
+                }
+            } else {
+                vehicule.setHeureDisponibilite(null);
+            }
 
             ModelView mv = new ModelView("layout.jsp");
             mv.addItem("content", "vehicule/vehicule_detail.jsp");

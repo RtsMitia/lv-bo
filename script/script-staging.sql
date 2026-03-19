@@ -28,8 +28,12 @@ CREATE TABLE IF NOT EXISTS staging.vehicule (
     id SERIAL PRIMARY KEY,
     reference VARCHAR(50),
     place INT,
-    type_carburant VARCHAR(1)
+    type_carburant VARCHAR(1),
+    heure_disponibilite TIME DEFAULT TIME '00:00:00'
 );
+
+ALTER TABLE staging.vehicule
+ADD COLUMN IF NOT EXISTS heure_disponibilite TIME DEFAULT TIME '00:00:00';
 
 
 CREATE TABLE IF NOT EXISTS staging.param (

@@ -74,12 +74,11 @@ INSERT INTO dev.param (cle, valeur) VALUES
 -- ('E01', 12, '2026-03-10 14:00', 1),
 -- ('E02',  2, '2026-03-10 14:00', 1);
 
-INSERT INTO dev.vehicule (reference, place, type_carburant) VALUES
-('CAR-5D', 10, 'D'),
-('CAR-5E', 9, 'E');
+INSERT INTO dev.vehicule (reference, place, type_carburant, heure_disponibilite) VALUES
+('CAR-5D', 8, 'D', '00:00:00'),
+('CAR-5E', 3, 'E', '00:00:00');
 
 INSERT INTO dev.reservation(id_client, nb_passager, date_heure_arrivee, id_hotel) VALUES
-('A02', 5, '2026-03-10 08:00', 1),
-('A01', 3, '2026-03-10 08:15', 2),
-('B01', 3, '2026-03-10 08:45', 2),
-('A03', 8, '2026-03-10 09:00', 1);
+('R1', 6, '2026-03-10 08:00', 1),
+('R2', 4, '2026-03-10 08:00', 2),
+('R3', 3, '2026-03-10 08:00', 2);

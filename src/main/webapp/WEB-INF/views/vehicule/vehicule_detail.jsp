@@ -16,6 +16,7 @@
         <tr><td><strong>Reference</strong></td><td><%= vehicule.getReference() %></td></tr>
         <tr><td><strong>Place</strong></td><td><%= vehicule.getPlace() %></td></tr>
         <tr><td><strong>Type carburant</strong></td><td><%= vehicule.getTypeCarburant() %></td></tr>
+        <tr><td><strong>Heure disponibilite</strong></td><td><%= vehicule.getHeureDisponibilite() == null ? "-" : vehicule.getHeureDisponibilite() %></td></tr>
     </table>
     <p>
         <a href="<%= request.getContextPath() + "/vehicule/form/" + vehicule.getId() %>">Edit</a>
