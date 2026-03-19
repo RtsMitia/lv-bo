@@ -65,7 +65,7 @@ public class AssignationController {
 
             List<AssignationWithDetails> assignationsWithDetails = assignationRepository.findWithDetailsByDate(localDate);
             enrichAssignationsWithTrajet(assignationsWithDetails);
-            List<Reservation> unassignedReservations = reservationRepository.findUnassignedByDate(localDate);
+            List<Reservation> unassignedReservations = assignationService.getUnassignedReservationsForDate(localDate);
 
             Map<Integer, String> hotelMap = new HashMap<>();
             List<Hotel> hotels = hotelRepository.findAll();
