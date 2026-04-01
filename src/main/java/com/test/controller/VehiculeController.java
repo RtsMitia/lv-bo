@@ -1,8 +1,8 @@
 package com.test.controller;
 
 import java.util.List;
+import java.time.LocalTime;
 
-import com.fasterxml.jackson.annotation.JsonCreator.Mode;
 import com.fw.ModelView;
 import com.fw.annotations.AnnotationController;
 import com.fw.annotations.ManageUrl;
@@ -50,7 +50,7 @@ public class VehiculeController {
 
     @ManageUrl("/save") 
     @MyPOST
-    public ModelView save(String reference, Integer place, String typeCarburant, HttpServletRequest request) {
+    public ModelView save(String reference, Integer place, String typeCarburant, String heureDisponibilite, HttpServletRequest request) {
         try {
             Vehicule vehicule = new Vehicule();
 
@@ -67,6 +67,9 @@ public class VehiculeController {
             vehicule.setReference(reference);
             vehicule.setPlace(place);
             vehicule.setTypeCarburant(typeCarburant);
+            if (heureDisponibilite != null && !heureDisponibilite.isBlank()) {
+                vehicule.setHeureDisponibilite(LocalTime.parse(heureDisponibilite));
+            }
 
             ModelView mv = new ModelView("layout.jsp");
             mv.addItem("content", "vehicule/vehicule_detail.jsp");

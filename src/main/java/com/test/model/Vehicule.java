@@ -60,5 +60,6 @@ public class Vehicule {
     public void setTypeCarburant(String typeCarburant) {
         this.typeCarburant = typeCarburant;
     }
+
     
 }

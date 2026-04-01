@@ -53,8 +53,11 @@ public class AssignationService {
         List<Assignation> result = new ArrayList<>();
 
         while (!resaCp.isEmpty() || !resaNA.isEmpty()) {
+            int beforeResaCpSize = resaCp.size();
+            int beforeResaNASize = resaNA.size();
+            int beforeResultSize = result.size();
 
-            List<VehiculeDisponibiliteDTO> vehicules = getVehiculesDisponibles();
+            List<VehiculeDisponibiliteDTO> vehicules = getVehiculesDisponibles(date);
             if (vehicules.isEmpty()) break;
 
             // Priorité absolue sur l'heure de disponibilité. En cas d'égalité d'heure, on privilégie la voiture avec le moins de capacité (ajustement optimal)
@@ -64,11 +67,26 @@ public class AssignationService {
             LocalDateTime plageDebut = vehicules.get(0).getHeureDisponibilite();
 
             if (resaNA.isEmpty() && !resaCp.isEmpty()) {
-                plageDebut = resaCp.get(0).getDateHeureArrivee();
+                plageDebut = min(plageDebut, resaCp.get(0).getDateHeureArrivee());
             }
+
+            final LocalDateTime plageDebutFinal = plageDebut;
+            /*vehicules = vehicules.stream()
+                    .filter(v -> v.getHeureDisponibilite() != null && !v.getHeureDisponibilite().isAfter(plageDebutFinal))
+                    .collect(Collectors.toList());*/
+            if (vehicules.isEmpty()) {
+                break;
+            }
+
             LocalDateTime plageFin = plageDebut.plusMinutes(TA);
 
             List<Reservation> listGroup = getReservationBetweenPlage(resaCp, plageDebut, plageFin);
+            if (listGroup.isEmpty() && resaNA.isEmpty() && !resaCp.isEmpty()) {
+                // Reservations arrived before vehicle availability are still waiting and should be considered.
+                listGroup = resaCp.stream()
+                        .filter(r -> r.getDateHeureArrivee() != null && !r.getDateHeureArrivee().isAfter(plageDebutFinal))
+                        .collect(Collectors.toList());
+            }
             listGroup.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
 
             traiterResaNAPrioritaire(resaNA, vehicules, listGroup, resaCp, result, plageDebut, plageFin, TA);
@@ -76,6 +94,13 @@ public class AssignationService {
             traiterGroupeNormal(resaNA, vehicules, listGroup, resaCp, result);
 
             calculateAndUpdateDateRetourFor(result);
+
+            boolean noProgress = beforeResaCpSize == resaCp.size()
+                    && beforeResaNASize == resaNA.size()
+                    && beforeResultSize == result.size();
+            if (noProgress) {
+                break;
+            }
         }
 
         return result;
@@ -309,6 +334,12 @@ public class AssignationService {
         calculateAndUpdateRetourAeroport(assignations);
     }
     
+    private LocalDateTime min(LocalDateTime a, LocalDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isBefore(b) ? a : b;
+    }
+
     private LocalDateTime max(LocalDateTime a, LocalDateTime b) {
         if (a == null) return b;
         if (b == null) return a;
@@ -321,7 +352,7 @@ public class AssignationService {
                 .collect(Collectors.toList());
     }
 
-    private List<VehiculeDisponibiliteDTO> getVehiculesDisponibles() {
+    private List<VehiculeDisponibiliteDTO> getVehiculesDisponibles(LocalDate date) {
         List<Assignation> allAssignations = assignationRepo.findAll();
         Map<Integer, LocalDateTime> latestRetourByVehicule = new HashMap<>();
 
@@ -334,8 +365,11 @@ public class AssignationService {
         List<VehiculeDisponibiliteDTO> result = new ArrayList<>();
         for (Vehicule vehicule : vehiculeRepo.findAll()) {
             if (vehicule.getId() == null) continue;
-            
-            LocalDateTime heureDispo = latestRetourByVehicule.getOrDefault(vehicule.getId(), LocalDateTime.MIN);
+            LocalDateTime heureDispoBase = date.atTime(
+                    vehicule.getHeureDisponibilite() != null ? vehicule.getHeureDisponibilite() : java.time.LocalTime.MIDNIGHT
+            );
+            LocalDateTime latestRetour = latestRetourByVehicule.get(vehicule.getId());
+            LocalDateTime heureDispo = max(heureDispoBase, latestRetour);
             result.add(new VehiculeDisponibiliteDTO(vehicule.getId(), vehicule, heureDispo));
         }
 
