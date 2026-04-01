@@ -285,6 +285,23 @@ public class AssignationRepository {
         return null;
     }
 
+    public boolean updateDepartAeroport(Integer assignationId, java.time.LocalDateTime departAeroport) {
+        String sql = "UPDATE assignation SET depart_aeroport = ? WHERE id = ?";
+
+        try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setTimestamp(1, Timestamp.valueOf(departAeroport));
+            ps.setInt(2, assignationId);
+
+            int rowsAffected = ps.executeUpdate();
+            return rowsAffected > 0;
+
+        } catch (SQLException e) {
+            throw new RuntimeException("Error updating depart_aeroport for assignation id " + assignationId, e);
+        }
+    }
+
     public boolean updateHeureRetourAeroport(Integer assignationId, java.time.LocalDateTime retourAeroport) {
         String sql = "UPDATE assignation SET retour_aeroport = ? WHERE id = ?";
 

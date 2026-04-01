@@ -61,7 +61,7 @@ public class AssignationController {
         try {
             LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_DATE);
 
-            int assignedCount = assignationService.assignReservationsForDate(localDate);
+            int assignedCount = assignationService.assignReservationsForDate(localDate).size();
 
             List<AssignationWithDetails> assignationsWithDetails = assignationRepository.findWithDetailsByDate(localDate);
             enrichAssignationsWithTrajet(assignationsWithDetails);
