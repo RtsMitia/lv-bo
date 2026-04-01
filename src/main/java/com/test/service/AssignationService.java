@@ -1,4 +1,4 @@
-﻿package com.test.service;
+package com.test.service;
 
 import com.test.dto.AssignationWithDetails;
 import com.test.dto.ResaNADTO;
@@ -44,6 +44,7 @@ public class AssignationService {
     }
 
     public List<Assignation> assignReservationsForDate(LocalDate date) throws Exception {
+        assignationRepo.deleteByDepartDate(date);
         int TA = getTa();
         List<Reservation> reservations = getReservations(date);
         reservations.sort(Comparator.comparing(Reservation::getDateHeureArrivee));
