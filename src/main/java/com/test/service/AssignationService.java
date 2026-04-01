@@ -158,6 +158,25 @@ public class AssignationService {
             capaciteRestante = remplirDepuisResaNA(resaNA, capaciteRestante, A);
 
             if (capaciteRestante > 0) {
+                Reservation exactMatch = null;
+                for (Reservation r : listGroup) {
+                    if (r.getDateHeureArrivee() != null && r.getDateHeureArrivee().equals(v.getHeureDisponibilite())) {
+                        int pass = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                        if (pass == capaciteRestante) {
+                            exactMatch = r;
+                            break;
+                        }
+                    }
+                }
+                if (exactMatch != null) {
+                    createAssignationDetail(A.getId(), exactMatch.getId(), capaciteRestante);
+                    listGroup.remove(exactMatch);
+                    resaCp.remove(exactMatch);
+                    capaciteRestante = 0;
+                }
+            }
+
+            if (capaciteRestante > 0) {
                 completerVehicule(resaNA, listGroup, capaciteRestante, A, resaCp);
             } else {
                 A.setDepartAeroport(v.getHeureDisponibilite());
@@ -353,7 +372,8 @@ public class AssignationService {
     }
 
     private List<VehiculeDisponibiliteDTO> getVehiculesDisponibles(LocalDate date) {
-        List<Assignation> allAssignations = assignationRepo.findAll();
+        // List<Assignation> allAssignations = assignationRepo.findAll();
+        List<Assignation> allAssignations = assignationRepo.getByDate(date);
         Map<Integer, LocalDateTime> latestRetourByVehicule = new HashMap<>();
 
         for (Assignation assignation : allAssignations) {

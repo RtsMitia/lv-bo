@@ -501,6 +501,35 @@ public class AssignationRepository {
         return list;
     }
 
+     public List<Assignation> getByDate(LocalDate date) {
+        String sql = "SELECT * FROM assignation a WHERE a.depart_aeroport::DATE = ?";
+        List<Assignation> list = new ArrayList<>();
+
+         try (Connection c = ds.getConnection();
+                PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setDate(1, Date.valueOf(date));
+            try(ResultSet rs = ps.executeQuery()) {
+                while(rs.next()) {
+                    Assignation a = new Assignation();
+                    a.setId(rs.getInt("id"));
+                    a.setVehicule(rs.getInt("vehicule"));
+                    
+                    Timestamp departAeroport = rs.getTimestamp("depart_aeroport");
+                    Timestamp retourAeroport = rs.getTimestamp("retour_aeroport");
+
+                    a.setDepartAeroport(departAeroport.toLocalDateTime());
+                    a.setRetourAeroport(retourAeroport.toLocalDateTime());
+
+                    list.add(a);
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Erreur lors de la recuperation des assignations");
+        }
+        
+        return list;
+    }
+
     /**
      * Delete all assignations of a given date and all their details in a single SQL statement.
      */
