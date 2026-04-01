@@ -1,20 +1,32 @@
 package com.test.model;
 
+import java.time.LocalTime;
+
 public class Vehicule {
     
     private Integer id;
     private String reference;
     private Integer place;
     private String typeCarburant;
+    private LocalTime heureDisponibilite;
+
+    public LocalTime getHeureDisponibilite() {
+        return heureDisponibilite;
+    }
+
+    public void setHeureDisponibilite(LocalTime heureDisponibilite) {
+        this.heureDisponibilite = heureDisponibilite;
+    }
 
     public Vehicule() {
     }
 
-    public Vehicule(Integer id, String reference, Integer place, String typeCarburant) {
+    public Vehicule(Integer id, String reference, Integer place, String typeCarburant, LocalTime heureDisponibilite) {
         this.id = id;
         this.reference = reference;
         this.place = place;
         this.typeCarburant = typeCarburant;
+        this.heureDisponibilite = heureDisponibilite;
     }
 
     public Integer getId() {

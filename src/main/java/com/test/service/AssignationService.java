@@ -1,4 +1,4 @@
-package com.test.service;
+﻿package com.test.service;
 
 import com.test.dto.AssignationWithDetails;
 import com.test.dto.ResaNADTO;
@@ -57,7 +57,9 @@ public class AssignationService {
             List<VehiculeDisponibiliteDTO> vehicules = getVehiculesDisponibles();
             if (vehicules.isEmpty()) break;
 
-            vehicules.sort(Comparator.comparing(VehiculeDisponibiliteDTO::getHeureDisponibilite));
+            // Priorité absolue sur l'heure de disponibilité. En cas d'égalité d'heure, on privilégie la voiture avec le moins de capacité (ajustement optimal)
+            vehicules.sort(Comparator.comparing(VehiculeDisponibiliteDTO::getHeureDisponibilite)
+                    .thenComparing(v -> v.getVehicule().getPlace() != null ? v.getVehicule().getPlace() : 0));
 
             LocalDateTime plageDebut = vehicules.get(0).getHeureDisponibilite();
 
@@ -89,13 +91,39 @@ public class AssignationService {
             LocalDateTime plageFin,
             int TA) {
 
-        resaNA.sort(Comparator.comparing(ResaNADTO::getRestePersonne).reversed());
-        Iterator<VehiculeDisponibiliteDTO> itVeh = vehicules.iterator();
+        while (!vehicules.isEmpty() && !resaNA.isEmpty()) {
+            resaNA.sort(Comparator.comparing(ResaNADTO::getRestePersonne).reversed());
+            
+            // 1. Trouver l'heure des "premiers" véhicules arrivés (puisque la liste est triée par heure)
+            LocalDateTime earliestTime = vehicules.get(0).getHeureDisponibilite();
 
-        while (itVeh.hasNext() && !resaNA.isEmpty()) {
+            // 2. Regrouper tous les véhicules qui arrivent exactement "en même temps"
+            List<VehiculeDisponibiliteDTO> earliestVehicles = new ArrayList<>();
+            for (VehiculeDisponibiliteDTO v : vehicules) {
+                if (v.getHeureDisponibilite().equals(earliestTime)) {
+                    earliestVehicles.add(v);
+                } else {
+                    break; 
+                }
+            }
 
-            VehiculeDisponibiliteDTO v = itVeh.next();
-            int capaciteRestante = v.getVehicule().getPlace();
+            // 3. Parmi les premiers arrivés, choisir le plus optimal pour la plus grosse resaNA restante
+            int required = resaNA.get(0).getRestePersonne();
+            VehiculeDisponibiliteDTO bestVeh = earliestVehicles.stream().min((a, b) -> {
+                int ca = a.getVehicule().getPlace() != null ? a.getVehicule().getPlace() : 0;
+                int cb = b.getVehicule().getPlace() != null ? b.getVehicule().getPlace() : 0;
+                boolean af = ca >= required;
+                boolean bf = cb >= required;
+                if (af != bf) return af ? -1 : 1; // On privilégie la voiture qui a assez de places si possible
+                int da = Math.abs(ca - required);
+                int db = Math.abs(cb - required);
+                return Integer.compare(da, db);   // On privilégie la capacité la plus "ajustée"
+            }).orElse(earliestVehicles.get(0));
+
+            VehiculeDisponibiliteDTO v = bestVeh;
+            vehicules.remove(v);
+
+            int capaciteRestante = v.getVehicule().getPlace() != null ? v.getVehicule().getPlace() : 0;
 
             Assignation A = createAssignation(
                     v.getIdVehicule(),
@@ -109,8 +137,8 @@ public class AssignationService {
             } else {
                 A.setDepartAeroport(v.getHeureDisponibilite());
                 
-                if(itVeh.hasNext()) {
-                    VehiculeDisponibiliteDTO nextVeh = vehicules.get(vehicules.indexOf(v) + 1);
+                if(!vehicules.isEmpty()) {
+                    VehiculeDisponibiliteDTO nextVeh = vehicules.get(0);
                     plageDebut = nextVeh.getHeureDisponibilite();
                     plageFin = plageDebut.plusMinutes(TA);
                     listGroup.clear();
@@ -126,7 +154,6 @@ public class AssignationService {
             }
 
             result.add(A);
-            itVeh.remove();
         }
     }
 
@@ -307,6 +334,7 @@ public class AssignationService {
         List<VehiculeDisponibiliteDTO> result = new ArrayList<>();
         for (Vehicule vehicule : vehiculeRepo.findAll()) {
             if (vehicule.getId() == null) continue;
+            
             LocalDateTime heureDispo = latestRetourByVehicule.getOrDefault(vehicule.getId(), LocalDateTime.MIN);
             result.add(new VehiculeDisponibiliteDTO(vehicule.getId(), vehicule, heureDispo));
         }
