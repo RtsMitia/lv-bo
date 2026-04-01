@@ -1,4 +1,4 @@
-package com.test.service;
+﻿package com.test.service;
 
 import com.test.dto.AssignationWithDetails;
 import com.test.dto.ResaNADTO;
@@ -61,20 +61,12 @@ public class AssignationService {
             List<VehiculeDisponibiliteDTO> vehicules = getVehiculesDisponibles(date);
             if (vehicules.isEmpty()) break;
 
-            // Priorité absolue sur l'heure de disponibilité. En cas d'égalité d'heure, on privilégie la voiture avec le moins de capacité (ajustement optimal)
-            vehicules.sort(Comparator.comparing(VehiculeDisponibiliteDTO::getHeureDisponibilite)
-                    .thenComparing(v -> v.getVehicule().getPlace() != null ? v.getVehicule().getPlace() : 0));
-
             LocalDateTime plageDebut = vehicules.get(0).getHeureDisponibilite();
 
             if (resaNA.isEmpty() && !resaCp.isEmpty()) {
-                plageDebut = min(plageDebut, resaCp.get(0).getDateHeureArrivee());
+                plageDebut = max(plageDebut, resaCp.get(0).getDateHeureArrivee());
             }
 
-            final LocalDateTime plageDebutFinal = plageDebut;
-            /*vehicules = vehicules.stream()
-                    .filter(v -> v.getHeureDisponibilite() != null && !v.getHeureDisponibilite().isAfter(plageDebutFinal))
-                    .collect(Collectors.toList());*/
             if (vehicules.isEmpty()) {
                 break;
             }
@@ -82,21 +74,19 @@ public class AssignationService {
             LocalDateTime plageFin = plageDebut.plusMinutes(TA);
 
             List<Reservation> listGroup = getReservationBetweenPlage(resaCp, plageDebut, plageFin);
-            if (listGroup.isEmpty() && resaNA.isEmpty() && !resaCp.isEmpty()) {
-                // Reservations arrived before vehicle availability are still waiting and should be considered.
-                listGroup = resaCp.stream()
-                        .filter(r -> r.getDateHeureArrivee() != null && !r.getDateHeureArrivee().isAfter(plageDebutFinal))
-                        .collect(Collectors.toList());
-            }
             listGroup.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
 
-            traiterResaNAPrioritaire(resaNA, vehicules, listGroup, resaCp, result, plageDebut, plageFin, TA);
+            boolean startNextCycle = false;
+            
+            if (!resaNA.isEmpty()) {
+                startNextCycle = traiterResaNAPrioritaire(resaNA, vehicules, listGroup, resaCp, result, plageDebut, plageFin, TA);
+            }
 
-            traiterGroupeNormal(resaNA, vehicules, listGroup, resaCp, result);
+            if (!startNextCycle) {
+                startNextCycle = traiterGroupeNormal(resaNA, vehicules, listGroup, resaCp, result);
+            }
 
-            calculateAndUpdateDateRetourFor(result);
-
-            boolean noProgress = beforeResaCpSize == resaCp.size()
+            boolean noProgress = !startNextCycle && beforeResaCpSize == resaCp.size()
                     && beforeResaNASize == resaNA.size()
                     && beforeResultSize == result.size();
             if (noProgress) {
@@ -107,7 +97,7 @@ public class AssignationService {
         return result;
     }
 
-    private void traiterResaNAPrioritaire(
+    private boolean traiterResaNAPrioritaire(
             List<ResaNADTO> resaNA,
             List<VehiculeDisponibiliteDTO> vehicules,
             List<Reservation> listGroup,
@@ -117,99 +107,97 @@ public class AssignationService {
             LocalDateTime plageFin,
             int TA) {
 
-        while (!vehicules.isEmpty() && !resaNA.isEmpty()) {
-            resaNA.sort(Comparator.comparing(ResaNADTO::getRestePersonne).reversed());
-            
-            // 1. Trouver l'heure des "premiers" véhicules arrivés (puisque la liste est triée par heure)
-            LocalDateTime earliestTime = vehicules.get(0).getHeureDisponibilite();
+        if (vehicules.isEmpty() || resaNA.isEmpty()) return false;
 
-            // 2. Regrouper tous les véhicules qui arrivent exactement "en même temps"
-            List<VehiculeDisponibiliteDTO> earliestVehicles = new ArrayList<>();
-            for (VehiculeDisponibiliteDTO v : vehicules) {
-                if (v.getHeureDisponibilite().equals(earliestTime)) {
-                    earliestVehicles.add(v);
-                } else {
-                    break; 
-                }
+        resaNA.sort(Comparator.comparing(ResaNADTO::getRestePersonne).reversed());
+        
+        // 1. Trouver l'heure des "premiers" véhicules arrivés (puisque la liste est triée par heure)
+        LocalDateTime earliestTime = vehicules.get(0).getHeureDisponibilite();
+
+        // 2. Regrouper tous les véhicules qui arrivent exactement "en même temps"
+        List<VehiculeDisponibiliteDTO> earliestVehicles = new ArrayList<>();
+        for (VehiculeDisponibiliteDTO v : vehicules) {
+            if (v.getHeureDisponibilite().equals(earliestTime)) {
+                earliestVehicles.add(v);
+            } else {
+                break; 
             }
+        }
 
-            // 3. Parmi les premiers arrivés, choisir le plus optimal pour la plus grosse resaNA restante
-            int required = resaNA.get(0).getRestePersonne();
-            VehiculeDisponibiliteDTO bestVeh = earliestVehicles.stream().min((a, b) -> {
-                int ca = a.getVehicule().getPlace() != null ? a.getVehicule().getPlace() : 0;
-                int cb = b.getVehicule().getPlace() != null ? b.getVehicule().getPlace() : 0;
-                boolean af = ca >= required;
-                boolean bf = cb >= required;
-                if (af != bf) return af ? -1 : 1; // On privilégie la voiture qui a assez de places si possible
-                int da = Math.abs(ca - required);
-                int db = Math.abs(cb - required);
-                return Integer.compare(da, db);   // On privilégie la capacité la plus "ajustée"
-            }).orElse(earliestVehicles.get(0));
+        // 3. Parmi les premiers arrivés, choisir le plus optimal pour la plus grosse resaNA restante
+        int required = resaNA.get(0).getRestePersonne();
+        VehiculeDisponibiliteDTO bestVeh = earliestVehicles.stream().min((a, b) -> {
+            int ca = a.getVehicule().getPlace() != null ? a.getVehicule().getPlace() : 0;
+            int cb = b.getVehicule().getPlace() != null ? b.getVehicule().getPlace() : 0;
+            boolean af = ca >= required;
+            boolean bf = cb >= required;
+            if (af != bf) return af ? -1 : 1; // On privilégie la voiture qui a assez de places si possible
+            int da = Math.abs(ca - required);
+            int db = Math.abs(cb - required);
+            if (da != db) return Integer.compare(da, db);
+            return Integer.compare(earliestVehicles.indexOf(a), earliestVehicles.indexOf(b));
+        }).orElse(earliestVehicles.get(0));
 
-            VehiculeDisponibiliteDTO v = bestVeh;
-            vehicules.remove(v);
+        VehiculeDisponibiliteDTO v = bestVeh;
+        vehicules.remove(v);
 
-            int capaciteRestante = v.getVehicule().getPlace() != null ? v.getVehicule().getPlace() : 0;
+        int capaciteRestante = v.getVehicule().getPlace() != null ? v.getVehicule().getPlace() : 0;
 
-            Assignation A = createAssignation(
-                    v.getIdVehicule(),
-                    v.getHeureDisponibilite()
-            );
+        Assignation A = createAssignation(
+                v.getIdVehicule(),
+                v.getHeureDisponibilite()
+        );
 
-            capaciteRestante = remplirDepuisResaNA(resaNA, capaciteRestante, A);
+        capaciteRestante = remplirDepuisResaNA(resaNA, capaciteRestante, A);
 
-            if (capaciteRestante > 0) {
-                Reservation exactMatch = null;
-                for (Reservation r : listGroup) {
-                    if (r.getDateHeureArrivee() != null && r.getDateHeureArrivee().equals(v.getHeureDisponibilite())) {
-                        int pass = r.getNbPassager() != null ? r.getNbPassager() : 0;
-                        if (pass == capaciteRestante) {
-                            exactMatch = r;
-                            break;
-                        }
+        if (capaciteRestante > 0) {
+            Reservation exactMatch = null;
+            for (Reservation r : listGroup) {
+                if (r.getDateHeureArrivee() != null && r.getDateHeureArrivee().equals(v.getHeureDisponibilite())) {
+                    int pass = r.getNbPassager() != null ? r.getNbPassager() : 0;
+                    if (pass == capaciteRestante) {
+                        exactMatch = r;
+                        break;
                     }
                 }
-                if (exactMatch != null) {
-                    createAssignationDetail(A.getId(), exactMatch.getId(), capaciteRestante);
-                    listGroup.remove(exactMatch);
-                    resaCp.remove(exactMatch);
-                    capaciteRestante = 0;
-                }
             }
-
-            if (capaciteRestante > 0) {
-                completerVehicule(resaNA, listGroup, capaciteRestante, A, resaCp);
-            } else {
-                A.setDepartAeroport(v.getHeureDisponibilite());
-                
-                if(!vehicules.isEmpty()) {
-                    VehiculeDisponibiliteDTO nextVeh = vehicules.get(0);
-                    plageDebut = nextVeh.getHeureDisponibilite();
-                    plageFin = plageDebut.plusMinutes(TA);
-                    listGroup.clear();
-                    listGroup.addAll(getReservationBetweenPlage(resaCp, plageDebut, plageFin));
-                    listGroup.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
-                } else if (!resaCp.isEmpty()) {
-                    plageDebut = resaCp.get(0).getDateHeureArrivee();
-                    plageFin = plageDebut.plusMinutes(TA);
-                    listGroup.clear();
-                    listGroup.addAll(getReservationBetweenPlage(resaCp, plageDebut, plageFin));
-                    listGroup.sort(Comparator.comparing(Reservation::getNbPassager).reversed());
-                }
+            if (exactMatch != null) {
+                createAssignationDetail(A.getId(), exactMatch.getId(), capaciteRestante);
+                listGroup.remove(exactMatch);
+                resaCp.remove(exactMatch);
+                capaciteRestante = 0;
             }
-
-            result.add(A);
         }
+
+        if (capaciteRestante > 0) {
+            capaciteRestante = completerVehicule(resaNA, listGroup, capaciteRestante, A, resaCp);
+        }
+        
+        if (capaciteRestante > 0) {
+            A.setDepartAeroport(v.getHeureDisponibilite().plusMinutes(TA));
+            assignationRepo.updateDepartAeroport(A.getId(), v.getHeureDisponibilite().plusMinutes(TA));
+        } else {
+            A.setDepartAeroport(v.getHeureDisponibilite());
+            assignationRepo.updateDepartAeroport(A.getId(), v.getHeureDisponibilite());
+        }
+
+        calculateAndUpdateRetourAeroport(A); // IMMEDIATE calculation
+        result.add(A);
+        
+        return true;
     }
 
-    private void traiterGroupeNormal(
+    private boolean traiterGroupeNormal(
             List<ResaNADTO> resaNA,
             List<VehiculeDisponibiliteDTO> vehicules,
             List<Reservation> listGroup,
             List<Reservation> resaCp,
             List<Assignation> result) {
+
+        if (listGroup.isEmpty()) return false;
         
         List<Assignation> assignationsGroup = new ArrayList<>();
+        boolean processed = false;
 
         LocalDateTime heureDepartGroupe = getHeureMax(listGroup);
 
@@ -234,6 +222,7 @@ public class AssignationService {
             createAssignationDetail(A.getId(), r.getId(), nbPris);
             
             assignationsGroup.add(A);
+            processed = true;
             
             int reste = capacite - nbPris;
 
@@ -256,7 +245,10 @@ public class AssignationService {
         for (Assignation assignation : assignationsGroup) {
             assignation.setDepartAeroport(heureDepartGroupe);
             assignationRepo.updateDepartAeroport(assignation.getId(), heureDepartGroupe);
+            calculateAndUpdateRetourAeroport(assignation); // IMMEDIATE calculation
         }
+
+        return processed;
     }
 
     private int remplirDepuisResaNA(
@@ -290,7 +282,7 @@ public class AssignationService {
         return capaciteRestante;
     }
 
-    public void completerVehicule(
+    public int completerVehicule(
             List<ResaNADTO> resaNA,
             List<Reservation> listGroup,
             int capaciteRestante,
@@ -346,6 +338,8 @@ public class AssignationService {
             listGroup.remove(best);
             resaCp.remove(best);
         }
+        
+        return capaciteRestante;
     }
 
     // Helper Functions
@@ -376,11 +370,15 @@ public class AssignationService {
         // List<Assignation> allAssignations = assignationRepo.findAll();
         List<Assignation> allAssignations = assignationRepo.getByDate(date);
         Map<Integer, LocalDateTime> latestRetourByVehicule = new HashMap<>();
+        Map<Integer, Integer> nbTrajetsByVehicule = new HashMap<>();
 
         for (Assignation assignation : allAssignations) {
             Integer vehiculeId = assignation.getVehicule();
-            if (vehiculeId == null || assignation.getRetourAeroport() == null) continue;
-            latestRetourByVehicule.merge(vehiculeId, assignation.getRetourAeroport(), this::max);
+            if (vehiculeId == null) continue;
+            if (assignation.getRetourAeroport() != null) {
+                latestRetourByVehicule.merge(vehiculeId, assignation.getRetourAeroport(), this::max);
+            }
+            nbTrajetsByVehicule.put(vehiculeId, nbTrajetsByVehicule.getOrDefault(vehiculeId, 0) + 1);
         }
 
         List<VehiculeDisponibiliteDTO> result = new ArrayList<>();
@@ -394,13 +392,18 @@ public class AssignationService {
             result.add(new VehiculeDisponibiliteDTO(vehicule.getId(), vehicule, heureDispo));
         }
 
+        result.sort(Comparator.comparing(VehiculeDisponibiliteDTO::getHeureDisponibilite)
+                .thenComparingInt(v -> nbTrajetsByVehicule.getOrDefault(v.getIdVehicule(), 0))
+                .thenComparingInt(v -> (v.getVehicule().getTypeCarburant() != null && v.getVehicule().getTypeCarburant().equalsIgnoreCase("D")) ? 0 : 1)
+                .thenComparingInt(v -> v.getVehicule().getPlace() != null ? v.getVehicule().getPlace() : 0));
+
         return result;
     }
 
     private List<Reservation> getReservationBetweenPlage(List<Reservation> reservations, LocalDateTime plageDebut, LocalDateTime plageFin) {
         List<Reservation> result = new ArrayList<>();
         for (Reservation r : reservations) {
-            if (r.getDateHeureArrivee() != null && !r.getDateHeureArrivee().isBefore(plageDebut) && !r.getDateHeureArrivee().isAfter(plageFin)) {
+            if (r.getDateHeureArrivee() != null && !r.getDateHeureArrivee().isAfter(plageFin)) {
                 result.add(r);
             }
         }
@@ -430,7 +433,9 @@ public class AssignationService {
             if (a.getHeureDisponibilite() == null && b.getHeureDisponibilite() == null) return 0;
             if (a.getHeureDisponibilite() == null) return -1;
             if (b.getHeureDisponibilite() == null) return 1;
-            return a.getHeureDisponibilite().compareTo(b.getHeureDisponibilite());
+            int timeCmp = a.getHeureDisponibilite().compareTo(b.getHeureDisponibilite());
+            if (timeCmp != 0) return timeCmp;
+            return Integer.compare(vehicules.indexOf(a), vehicules.indexOf(b));
         }).orElse(null);
     }
 
