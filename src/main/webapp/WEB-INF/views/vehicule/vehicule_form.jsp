@@ -25,6 +25,10 @@
             <input type="text" name="typeCarburant" value="<%= vehicule.getTypeCarburant() == null ? "" : vehicule.getTypeCarburant() %>" />
         </div>
         <div>
+            <label>Heure disponibilite:</label>
+            <input type="time" name="heureDisponibilite" value="<%= vehicule.getHeureDisponibilite() == null ? "" : vehicule.getHeureDisponibilite().toString() %>" />
+        </div>
+        <div>
             <button type="submit">Save</button>
             <a href="<%= request.getContextPath() + "/vehicule/list" %>">Cancel</a>
         </div>

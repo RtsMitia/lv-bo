@@ -1,4 +1,4 @@
-﻿package com.test.service;
+package com.test.service;
 
 import com.test.dto.AssignationWithDetails;
 import com.test.dto.ResaNADTO;
@@ -54,7 +54,7 @@ public class AssignationService {
 
         while (!resaCp.isEmpty() || !resaNA.isEmpty()) {
 
-            List<VehiculeDisponibiliteDTO> vehicules = getVehiculesDisponibles();
+            List<VehiculeDisponibiliteDTO> vehicules = getVehiculesDisponibles(date);
             if (vehicules.isEmpty()) break;
 
             vehicules.sort(Comparator.comparing(VehiculeDisponibiliteDTO::getHeureDisponibilite));
@@ -62,8 +62,17 @@ public class AssignationService {
             LocalDateTime plageDebut = vehicules.get(0).getHeureDisponibilite();
 
             if (resaNA.isEmpty() && !resaCp.isEmpty()) {
-                plageDebut = resaCp.get(0).getDateHeureArrivee();
+                plageDebut = max(plageDebut, resaCp.get(0).getDateHeureArrivee());
             }
+
+            final LocalDateTime plageDebutFinal = plageDebut;
+            vehicules = vehicules.stream()
+                    .filter(v -> v.getHeureDisponibilite() != null && !v.getHeureDisponibilite().isAfter(plageDebutFinal))
+                    .collect(Collectors.toList());
+            if (vehicules.isEmpty()) {
+                continue;
+            }
+
             LocalDateTime plageFin = plageDebut.plusMinutes(TA);
 
             List<Reservation> listGroup = getReservationBetweenPlage(resaCp, plageDebut, plageFin);
@@ -294,7 +303,7 @@ public class AssignationService {
                 .collect(Collectors.toList());
     }
 
-    private List<VehiculeDisponibiliteDTO> getVehiculesDisponibles() {
+    private List<VehiculeDisponibiliteDTO> getVehiculesDisponibles(LocalDate date) {
         List<Assignation> allAssignations = assignationRepo.findAll();
         Map<Integer, LocalDateTime> latestRetourByVehicule = new HashMap<>();
 
@@ -307,7 +316,11 @@ public class AssignationService {
         List<VehiculeDisponibiliteDTO> result = new ArrayList<>();
         for (Vehicule vehicule : vehiculeRepo.findAll()) {
             if (vehicule.getId() == null) continue;
-            LocalDateTime heureDispo = latestRetourByVehicule.getOrDefault(vehicule.getId(), LocalDateTime.MIN);
+            LocalDateTime heureDispoBase = date.atTime(
+                    vehicule.getHeureDisponibilite() != null ? vehicule.getHeureDisponibilite() : java.time.LocalTime.MIDNIGHT
+            );
+            LocalDateTime latestRetour = latestRetourByVehicule.get(vehicule.getId());
+            LocalDateTime heureDispo = max(heureDispoBase, latestRetour);
             result.add(new VehiculeDisponibiliteDTO(vehicule.getId(), vehicule, heureDispo));
         }
 

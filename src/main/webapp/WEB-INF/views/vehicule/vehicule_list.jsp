@@ -10,6 +10,7 @@
             <th>Reference</th>
             <th>Place</th>
             <th>Type carburant</th>
+            <th>Heure disponibilite</th>
             <th>Actions</th>
         </tr>
         <%
@@ -22,6 +23,7 @@
             <td><%= v.getReference() %></td>
             <td><%= v.getPlace() %></td>
             <td><%= v.getTypeCarburant() %></td>
+            <td><%= v.getHeureDisponibilite() == null ? "" : v.getHeureDisponibilite() %></td>
             <td class="bo-actions">
                 <a class="bo-link" href="<%= request.getContextPath() + "/vehicule/" + v.getId() %>">View</a>
                 <a class="bo-link" href="<%= request.getContextPath() + "/vehicule/form/" + v.getId() %>">Edit</a>
@@ -33,7 +35,7 @@
             } else {
         %>
         <tr>
-            <td colspan="5">No vehicules found.</td>
+            <td colspan="6">No vehicules found.</td>
         </tr>
         <%
             }

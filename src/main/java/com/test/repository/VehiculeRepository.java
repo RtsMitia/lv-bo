@@ -8,7 +8,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.management.RuntimeErrorException;
 import javax.sql.DataSource;
 
 import com.test.config.AppConfig;
@@ -36,6 +35,9 @@ public class VehiculeRepository {
                 vehicule.setReference(rs.getString("reference"));
                 vehicule.setPlace(rs.getInt("place"));
                 vehicule.setTypeCarburant(rs.getString("type_carburant"));
+                if (rs.getTime("heure_disponibilite") != null) {
+                    vehicule.setHeureDisponibilite(rs.getTime("heure_disponibilite").toLocalTime());
+                }
                 vehicules.add(vehicule);
             }
 
@@ -61,6 +63,9 @@ public class VehiculeRepository {
                     vehicule.setReference(rs.getString("reference"));
                     vehicule.setPlace(rs.getInt("place"));
                     vehicule.setTypeCarburant(rs.getString("type_carburant"));
+                    if (rs.getTime("heure_disponibilite") != null) {
+                        vehicule.setHeureDisponibilite(rs.getTime("heure_disponibilite").toLocalTime());
+                    }
                 } else {
                     throw new RuntimeException("No vehicule with id = " + id);
                 }
@@ -78,16 +83,21 @@ public class VehiculeRepository {
     public Vehicule save(Vehicule vehicule) {
         try (Connection c = ds.getConnection()) {
 
-            String sql = "INSERT INTO vehicule (reference, place, type_carburant) VALUES (?, ?, ?)";
+            String sql = "INSERT INTO vehicule (reference, place, type_carburant, heure_disponibilite) VALUES (?, ?, ?, ?)";
             if (vehicule.getId() != null) {
                 sql = "UPDATE vehicule SET reference = ?, " + 
-                        "place = ?, type_carburant = ? " + 
+                        "place = ?, type_carburant = ?, heure_disponibilite = ? " + 
                         "WHERE id = ?";
                 try (PreparedStatement ps2 = c.prepareStatement(sql)) {
                     ps2.setString(1, vehicule.getReference());
                     ps2.setInt(2, vehicule.getPlace());
                     ps2.setString(3, vehicule.getTypeCarburant());
-                    ps2.setInt(4, vehicule.getId());
+                    if (vehicule.getHeureDisponibilite() != null) {
+                        ps2.setTime(4, java.sql.Time.valueOf(vehicule.getHeureDisponibilite()));
+                    } else {
+                        ps2.setNull(4, java.sql.Types.TIME);
+                    }
+                    ps2.setInt(5, vehicule.getId());
                     
                     int rowsAffected = ps2.executeUpdate();
                     return vehicule;
@@ -100,6 +110,11 @@ public class VehiculeRepository {
                 ps2.setString(1, vehicule.getReference());
                 ps2.setInt(2, vehicule.getPlace());
                 ps2.setString(3, vehicule.getTypeCarburant());
+                if (vehicule.getHeureDisponibilite() != null) {
+                    ps2.setTime(4, java.sql.Time.valueOf(vehicule.getHeureDisponibilite()));
+                } else {
+                    ps2.setNull(4, java.sql.Types.TIME);
+                }
 
                 int rowsAffected = ps2.executeUpdate();
                 try (ResultSet keys = ps2.getGeneratedKeys()) {
