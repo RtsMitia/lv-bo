@@ -488,8 +488,12 @@ public class AssignationRepository {
                     Timestamp departAeroport = rs.getTimestamp("depart_aeroport");
                     Timestamp retourAeroport = rs.getTimestamp("retour_aeroport");
 
-                    a.setDepartAeroport(departAeroport.toLocalDateTime());
-                    a.setRetourAeroport(retourAeroport.toLocalDateTime());
+                    if (departAeroport != null) {
+                        a.setDepartAeroport(departAeroport.toLocalDateTime());
+                    }
+                    if (retourAeroport != null) {
+                        a.setRetourAeroport(retourAeroport.toLocalDateTime());
+                    }
 
                     list.add(a);
                 }
@@ -517,8 +521,12 @@ public class AssignationRepository {
                     Timestamp departAeroport = rs.getTimestamp("depart_aeroport");
                     Timestamp retourAeroport = rs.getTimestamp("retour_aeroport");
 
-                    a.setDepartAeroport(departAeroport.toLocalDateTime());
-                    a.setRetourAeroport(retourAeroport.toLocalDateTime());
+                    if (departAeroport != null) {
+                        a.setDepartAeroport(departAeroport.toLocalDateTime());
+                    }
+                    if (retourAeroport != null) {
+                        a.setRetourAeroport(retourAeroport.toLocalDateTime());
+                    }
 
                     list.add(a);
                 }
