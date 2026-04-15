@@ -1,0 +1,16 @@
+=== SCRIPT POUR ENLEVER L'ERREUR \ufeff (UTF-8 BOM) ===
+
+Si vous rencontrez encore l'erreur de compilation : 
+"illegal character: '\ufeff'"
+
+Vous pouvez exécuter l'une de ces commandes dans votre terminal PowerShell à la racine du projet. 
+Remplacer simplement le nom du fichier s'il s'agit d'un autre fichier.
+
+Option 1 : Utiliser Node.js (Recommandé, c'est ce qui a fonctionné à 100%)
+--------------------------------------------------------------------------------
+node -e "const fs = require('fs'); const file = 'src/main/java/com/test/service/AssignationService.java'; let data = fs.readFileSync(file); if (data[0]===0xEF && data[1]===0xBB && data[2]===0xBF) { fs.writeFileSync(file, data.subarray(3)); }"
+
+
+Option 2 : Utiliser PowerShell (via .NET)
+--------------------------------------------------------------------------------
+$bytes = [System.IO.File]::ReadAllBytes("src\main\java\com\test\service\AssignationService.java"); if ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { [System.IO.File]::WriteAllBytes("src\main\java\com\test\service\AssignationService.java", $bytes[3..($bytes.Length-1)]) }
